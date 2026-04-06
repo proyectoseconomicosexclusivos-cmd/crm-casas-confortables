@@ -2453,3 +2453,98 @@ model AIChatMessage {
   @@index([sessionId])
   @@index([createdAt])
 }
+
+// ==========================================
+// CONTROL DE HORAS DE TRABAJADORES
+// ==========================================
+
+enum TimeEntryType {
+  WORK            // Trabajo normal
+  OVERTIME        // Horas extra
+  VACATION        // Vacaciones
+  SICK_LEAVE      // Baja médica
+  HOLIDAY         // Festivo
+  PERMISSION      // Permiso
+}
+
+model WorkerTimeLog {
+  id              String          @id @default(cuid())
+  userId          String
+  companyId       String
+  workId          String?         // Obra asignada (opcional)
+  
+  // Tipo de entrada
+  type            TimeEntryType   @default(WORK)
+  
+  // Fechas y horas
+  date            DateTime        // Fecha del trabajo
+  checkIn         DateTime?       // Hora de entrada
+  checkOut        DateTime?       // Hora de salida
+  
+  // Horas calculadas
+  hoursWorked     Float           @default(0)
+  overtimeHours   Float           @default(0)
+  
+  // Ubicación del fichaje
+  checkInLocation String?         // JSON con coordenadas
+  checkOutLocation String?        // JSON con coordenadas
+  
+  // Notas
+  notes           String?
+  
+  // Aprobación
+  isApproved      Boolean         @default(false)
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([userId])
+  @@index([companyId])
+  @@index([workId])
+  @@index([date])
+  @@index([type])
+}
+
+model WorkerSchedule {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  companyId       String
+  
+  // Horario semanal (JSON)
+  weeklySchedule  String          // JSON con horarios por día
+  
+  // Jornada
+  workHoursPerDay Float           @default(8)
+  workDaysPerWeek Int             @default(5)
+  
+  // Festivos y vacaciones
+  vacationDays    Int             @default(22)
+  usedVacationDays Int            @default(0)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+}
+
+model WorkerLocation {
+  id              String          @id @default(cuid())
+  userId          String
+  workId          String?
+  
+  // Ubicación
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  
+  // Timestamp
+  recordedAt      DateTime        @default(now())
+  
+  @@index([userId])
+  @@index([workId])
+  @@index([recordedAt])
+}

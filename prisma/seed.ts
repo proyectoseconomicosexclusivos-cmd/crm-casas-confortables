@@ -445,6 +445,158 @@ async function main() {
 
   console.log('✅ Achievements created');
 
+  // Crear trabajadores
+  const workers = [
+    {
+      email: 'trabajador1@casasconfortables.com',
+      name: 'Antonio',
+      lastName: 'Sánchez Pérez',
+      phone: '+34 610 111 000',
+    },
+    {
+      email: 'trabajador2@casasconfortables.com',
+      name: 'Luis',
+      lastName: 'Martín García',
+      phone: '+34 610 222 000',
+    },
+    {
+      email: 'trabajador3@casasconfortables.com',
+      name: 'José',
+      lastName: 'Ruiz Fernández',
+      phone: '+34 610 333 000',
+    },
+  ];
+
+  for (const worker of workers) {
+    await db.user.upsert({
+      where: { email: worker.email },
+      update: {},
+      create: {
+        email: worker.email,
+        password: hashedPassword,
+        name: worker.name,
+        lastName: worker.lastName,
+        phone: worker.phone,
+        role: 'WORKER',
+        companyId: company.id,
+        officeId: office.id,
+        teamId: team.id,
+      },
+    });
+    console.log('✅ Worker created:', worker.email);
+  }
+
+  // Crear cliente de ejemplo
+  await db.user.upsert({
+    where: { email: 'cliente@ejemplo.com' },
+    update: {},
+    create: {
+      email: 'cliente@ejemplo.com',
+      password: hashedPassword,
+      name: 'Juan',
+      lastName: 'Cliente Ejemplo',
+      phone: '+34 611 222 333',
+      role: 'CLIENT',
+      companyId: company.id,
+    },
+  });
+  console.log('✅ Client user created');
+
+  // Crear configuración de alertas automáticas
+  const alertRules = [
+    {
+      name: 'Lead frío - Sin contacto 3 días',
+      description: 'Alerta cuando un lead lleva 3 días sin contacto',
+      type: 'LEAD_COLD',
+      severity: 'WARNING',
+      conditions: JSON.stringify({ daysWithoutContact: 3 }),
+    },
+    {
+      name: 'Lead caliente sin seguimiento',
+      description: 'Alerta para leads con alta probabilidad sin actividad',
+      type: 'LEAD_HOT',
+      severity: 'CRITICAL',
+      conditions: JSON.stringify({ probabilityMin: 70, daysWithoutContact: 1 }),
+    },
+    {
+      name: 'Obra retrasada',
+      description: 'Alerta cuando una obra supera la fecha estimada',
+      type: 'WORK_DELAY',
+      severity: 'WARNING',
+      conditions: JSON.stringify({ daysOverdue: 1 }),
+    },
+    {
+      name: 'Tarea vencida',
+      description: 'Alerta para tareas que superan su fecha límite',
+      type: 'TASK_OVERDUE',
+      severity: 'WARNING',
+      conditions: JSON.stringify({ daysOverdue: 0 }),
+    },
+  ];
+
+  for (const rule of alertRules) {
+    await db.alertRule.create({
+      data: {
+        companyId: company.id,
+        ...rule,
+        notifyEmail: true,
+        notifyPush: true,
+        notifyUser: true,
+        notifyManager: true,
+        isActive: true,
+      },
+    });
+  }
+  console.log('✅ Alert rules created');
+
+  // Crear horarios de trabajadores
+  for (const worker of workers) {
+    const user = await db.user.findUnique({ where: { email: worker.email } });
+    if (user) {
+      await db.workerSchedule.create({
+        data: {
+          userId: user.id,
+          companyId: company.id,
+          weeklySchedule: JSON.stringify({
+            monday: { start: '08:00', end: '17:00' },
+            tuesday: { start: '08:00', end: '17:00' },
+            wednesday: { start: '08:00', end: '17:00' },
+            thursday: { start: '08:00', end: '17:00' },
+            friday: { start: '08:00', end: '15:00' },
+          }),
+          workHoursPerDay: 8,
+          workDaysPerWeek: 5,
+          vacationDays: 22,
+        },
+      });
+    }
+  }
+  console.log('✅ Worker schedules created');
+
+  // Crear tareas de ejemplo
+  const taskData = [
+    { title: 'Llamar a Juan Pérez', priority: 'high', status: 'pending' },
+    { title: 'Enviar presupuesto a Laura', priority: 'high', status: 'in_progress' },
+    { title: 'Programar visita con Miguel', priority: 'medium', status: 'pending' },
+    { title: 'Revisar documentación Elena', priority: 'medium', status: 'pending' },
+    { title: 'Preparar contrato Roberto', priority: 'high', status: 'completed' },
+  ];
+
+  for (const task of taskData) {
+    await db.task.create({
+      data: {
+        title: task.title,
+        description: `Tarea: ${task.title}`,
+        priority: task.priority,
+        status: task.status,
+        createdById: superAdmin.id,
+        assignedToId: teamLeader.id,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+  console.log('✅ Sample tasks created');
+
   console.log('🎉 Seeding completed!');
 }
 
