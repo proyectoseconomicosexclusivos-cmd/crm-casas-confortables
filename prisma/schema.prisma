@@ -18,6 +18,7 @@ enum UserRole {
   SUPER_ADMIN
   ADMIN
   TEAM_LEADER
+  ARCHITECT      // Arquitecto - sube proyectos y planos
   COMMERCIAL
   FRANCHISE
   REAL_ESTATE
@@ -2547,4 +2548,204 @@ model WorkerLocation {
   @@index([userId])
   @@index([workId])
   @@index([recordedAt])
+}
+
+// ==========================================
+// PROYECTOS ARQUITECTÓNICOS
+// ==========================================
+
+enum ProjectStatus {
+  DRAFT          // Borrador
+  IN_DESIGN      // En diseño
+  FOR_REVIEW     // Pendiente de revisión
+  APPROVED       // Aprobado
+  IN_CONSTRUCTION // En construcción
+  COMPLETED      // Completado
+  ARCHIVED       // Archivado
+}
+
+enum PlanType {
+  FLOOR_PLAN     // Plano de planta
+  ELEVATION      // Alzado
+  SECTION        // Sección
+  ELECTRICAL     // Instalación eléctrica
+  PLUMBING       // Fontanería
+  STRUCTURE      // Estructura
+  LANDSCAPE      // Jardinería
+  THREED_MODEL       // Modelo 3D
+  RENDER         // Render
+  OTHER          // Otro
+}
+
+model ArchitectProject {
+  id              String          @id @default(cuid())
+  companyId       String
+  createdById     String          // Arquitecto creador
+  workId          String?         // Obra asociada (si ya existe)
+  leadId          String?         // Lead asociado
+  
+  // Datos del proyecto
+  name            String
+  description     String?
+  reference       String?         // Referencia interna
+  location        String?
+  
+  // Estado
+  status          ProjectStatus   @default(DRAFT)
+  
+  // Datos del cliente
+  clientName      String?
+  clientPhone     String?
+  clientEmail     String?
+  
+  // Especificaciones
+  totalArea       Float?          // m² totales
+  floors          Int?            // Número de plantas
+  bedrooms        Int?
+  bathrooms       Int?
+  
+  // Fechas
+  startDate       DateTime?
+  estimatedEndDate DateTime?
+  completedAt     DateTime?
+  
+  // Visibilidad para cliente
+  visibleToClient Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  plans           ProjectPlan[]
+  comments        ProjectComment[]
+  approvals       ProjectApproval[]
+  
+  @@index([companyId])
+  @@index([createdById])
+  @@index([status])
+  @@index([workId])
+}
+
+model ProjectPlan {
+  id              String          @id @default(cuid())
+  projectId       String
+  uploadedById    String          // Arquitecto que sube
+  
+  // Datos del plano
+  name            String
+  description     String?
+  type            PlanType        @default(FLOOR_PLAN)
+  floor           Int?            // Planta (0=baja, 1=primera, etc.)
+  scale           String?         // Escala (1:100, etc.)
+  
+  // Archivo
+  fileName        String
+  filePath        String          // URL del archivo
+  fileSize        Int?
+  mimeType        String?
+  
+  // Versionado
+  version         Int             @default(1)
+  parentPlanId    String?         // Para versiones anteriores
+  
+  // Dimensiones del plano
+  width           Float?          // Ancho en metros
+  height          Float?          // Alto en metros
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Visibilidad
+  visibleToClient Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([type])
+  @@index([uploadedById])
+}
+
+model ProjectComment {
+  id              String          @id @default(cuid())
+  projectId       String
+  userId          String
+  planId          String?         // Comentario en un plano específico
+  
+  // Contenido
+  content         String
+  
+  // Posición en el plano (si aplica)
+  positionX       Float?
+  positionY       Float?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([userId])
+  @@index([planId])
+}
+
+model ProjectApproval {
+  id              String          @id @default(cuid())
+  projectId       String
+  approvedById    String          // Usuario que aprueba
+  
+  // Datos
+  status          String          @default("pending") // pending, approved, rejected
+  comments        String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  decidedAt       DateTime?
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([approvedById])
+}
+
+// ==========================================
+// ASIGNACIONES DIRECTAS A USUARIOS
+// ==========================================
+
+model DirectAssignment {
+  id              String          @id @default(cuid())
+  companyId       String
+  assignedToId    String          // Usuario que recibe la asignación
+  assignedById    String          // Usuario que asigna
+  
+  // Tipo de entidad asignada
+  entityType      String          // lead, work, task, project, plan
+  entityId        String
+  
+  // Datos
+  priority        Int             @default(3)  // 1=Urgente, 2=Alta, 3=Normal
+  notes           String?
+  
+  // Fechas
+  dueDate         DateTime?
+  completedAt     DateTime?
+  
+  // Estado
+  status          String          @default("pending") // pending, accepted, in_progress, completed, cancelled
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([assignedToId])
+  @@index([entityType])
+  @@index([entityId])
 }

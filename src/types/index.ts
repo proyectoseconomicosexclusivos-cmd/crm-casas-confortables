@@ -7,6 +7,7 @@ export type UserRole =
   | 'SUPER_ADMIN'
   | 'ADMIN'
   | 'TEAM_LEADER'
+  | 'ARCHITECT'
   | 'COMMERCIAL'
   | 'FRANCHISE'
   | 'REAL_ESTATE'
@@ -621,6 +622,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   SUPER_ADMIN: 'Super Administrador',
   ADMIN: 'Administrador',
   TEAM_LEADER: 'Jefe de Equipo',
+  ARCHITECT: 'Arquitecto',
   COMMERCIAL: 'Comercial',
   FRANCHISE: 'Franquiciado',
   REAL_ESTATE: 'Inmobiliaria',

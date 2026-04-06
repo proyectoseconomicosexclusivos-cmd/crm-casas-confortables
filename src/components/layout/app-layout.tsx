@@ -23,6 +23,8 @@ import {
   Trophy,
   DollarSign,
   Sparkles,
+  PenTool,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -44,6 +46,8 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Leads', href: '/leads', icon: FolderKanban },
   { name: 'Obras', href: '/works', icon: HardHat },
+  { name: 'Proyectos Arq.', href: '/architect', icon: PenTool, roles: ['ARCHITECT', 'ADMIN', 'SUPER_ADMIN'] },
+  { name: 'Portal Cliente', href: '/client-portal', icon: Eye, roles: ['CLIENT'] },
   { name: 'Producción', href: '/production', icon: Factory },
   { name: 'Subcontratas', href: '/subcontractors', icon: Users },
   { name: 'Gamificación', href: '/gamification', icon: Trophy },
@@ -111,7 +115,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
+          {navigation
+            .filter((item) => {
+              if (!item.roles) return true;
+              return user?.role && item.roles.includes(user.role);
+            })
+            .map((item) => {
             const isActive = pathname === item.href || 
               (item.href !== '/' && pathname.startsWith(item.href));
             return (
