@@ -22,6 +22,7 @@ import {
   Factory,
   Trophy,
   DollarSign,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -52,6 +53,9 @@ const navigation = [
   { name: 'Documentos', href: '/documents', icon: FileText },
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
+
+// Enlace especial para el asistente AI
+const aiAssistantLink = { name: 'Asistente AI', href: '/assistant', icon: Sparkles };
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -206,6 +210,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link href="/assistant">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="relative text-primary hover:text-primary hover:bg-primary/10"
+                >
+                  <Sparkles className="w-5 h-5" />
+                </Button>
+              </Link>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />

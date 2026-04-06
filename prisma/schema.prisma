@@ -2402,3 +2402,54 @@ model ValidationChecklist {
   @@index([companyId])
   @@index([category])
 }
+
+// ==========================================
+// ASISTENTE AI INTEGRADO
+// ==========================================
+
+model AIChatSession {
+  id                  String              @id @default(cuid())
+  userId              String
+  
+  // Datos de la sesión
+  title               String?             // Título opcional de la conversación
+  
+  // Contexto
+  context             String?             // JSON con contexto del CRM (lead actual, obra, etc.)
+  
+  // Estado
+  isActive            Boolean             @default(true)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  messages            AIChatMessage[]
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AIChatMessage {
+  id                  String              @id @default(cuid())
+  sessionId           String
+  
+  // Remitente
+  role                String              // "user" o "assistant"
+  
+  // Contenido
+  content             String
+  
+  // Metadata
+  metadata            String?             // JSON con información adicional (tokens, modelo, etc.)
+  
+  // Timestamp
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  session             AIChatSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
