@@ -1,0 +1,3987 @@
+// CRM SaaS - Casas Confortables
+// Schema completo para sistema multi-tenant
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEAM_LEADER
+  ARCHITECT      // Arquitecto - sube proyectos y planos
+  COMMERCIAL
+  FRANCHISE
+  REAL_ESTATE
+  SUBCONTRACTOR
+  WORKER
+  CLIENT
+}
+
+enum LeadStatus {
+  NEW           // Nuevo
+  CONTACTED     // Contactado
+  VISIT         // Visita programada
+  OFFER         // Oferta enviada
+  NEGOTIATION   // En negociación
+  CLOSED        // Cerrado (ganado)
+  LOST          // Perdido
+}
+
+enum LeadType {
+  NEW_BUILD     // Obra nueva
+  REFORM        // Reforma
+  INVESTMENT    // Inversión
+  FRANCHISE     // Franquicia
+  OTHER         // Otro
+}
+
+enum LeadSource {
+  WEB           // Web propia
+  FACEBOOK      // Facebook
+  INSTAGRAM     // Instagram
+  GOOGLE        // Google Ads
+  REFERRAL      // Recomendación
+  REAL_ESTATE   // Inmobiliaria
+  COLD_CALL     // Llamada en frío
+  FAIR          // Feria/evento
+  OTHER         // Otro
+}
+
+enum WorkStatus {
+  PLANNING      // Planificación
+  IN_PROGRESS   // En curso
+  PAUSED        // Pausada
+  COMPLETED     // Completada
+  CANCELLED     // Cancelada
+}
+
+enum CompanyType {
+  FRANCHISE     // Franquicia
+  REAL_ESTATE   // Inmobiliaria
+  SUBCONTRACTOR // Subcontrata
+  PARTNER       // Socio colaborador
+  OWN           // Empresa propia
+}
+
+enum AssignmentMethod {
+  ROUND_ROBIN   // Round Robin
+  BY_ZONE       // Por zona
+  BY_LOAD       // Por carga de trabajo
+  BY_TYPE       // Por tipo de lead
+  MANUAL        // Manual
+}
+
+enum NotificationType {
+  LEAD_ASSIGNED
+  LEAD_UPDATED
+  NEW_COMMENT
+  WORK_UPDATE
+  TASK_REMINDER
+  SYSTEM
+}
+
+enum DocumentType {
+  CONTRACT
+  BUDGET
+  INVOICE
+  CERTIFICATE
+  PHOTO
+  VIDEO
+  PLAN
+  OTHER
+}
+
+// ==========================================
+// USUARIOS Y AUTENTICACIÓN
+// ==========================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // Hash bcrypt
+  name          String
+  lastName      String?
+  phone         String?
+  avatar        String?   // URL del avatar
+  role          UserRole  @default(COMMERCIAL)
+  isActive      Boolean   @default(true)
+  
+  // Relaciones organizativas
+  companyId     String?
+  officeId      String?
+  teamId        String?
+  managerId     String?   // Jefe directo
+  
+  // Configuración
+  timezone         String    @default("Europe/Madrid")
+  language         String    @default("es")
+  emailNotifications Boolean @default(true)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relaciones
+  company       Company?  @relation(fields: [companyId], references: [id])
+  office        Office?   @relation(fields: [officeId], references: [id])
+  team          Team?     @relation(fields: [teamId], references: [id])
+  manager       User?     @relation("TeamMembers", fields: [managerId], references: [id])
+  teamMembers   User[]    @relation("TeamMembers")
+  
+  // Leads asignados
+  assignedLeads    Lead[]      @relation("AssignedLeads")
+  createdLeads     Lead[]      @relation("CreatedLeads")
+  leadComments     LeadComment[]
+  leadActivities   LeadActivity[]
+  
+  // Documentos
+  documents        Document[]
+  
+  // Obras
+  works            Work[]      @relation("CreatedWorks")
+  workUpdates      WorkUpdate[]
+  
+  // Tareas
+  tasks            Task[]
+  assignedTasks    Task[]      @relation("AssignedTasks")
+  
+  // Notificaciones
+  notifications    Notification[]
+  
+  // Logs
+  activityLogs     ActivityLog[]
+  
+  // Presupuestos
+  budgets          Budget[]
+  
+  // Configuración de reparto
+  assignmentConfig AssignmentConfig?
+  
+  // Sesiones y cuentas
+  sessions         Session[]
+  accounts         Account[]
+  
+  // Certificaciones de empleado
+  employeeCertifications EmployeeCertification[]
+  
+  // Análisis de documentos
+  documentAnalyses DocumentAnalysis[]
+  
+  // Biblioteca de documentos
+  libraryDocuments DocumentLibrary[]
+  
+  // Contratos firmados
+  signedContracts Contract[] @relation("ContractsSignedByUser")
+  
+  @@index([email])
+  @@index([role])
+  @@index([companyId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+}
+
+model Account {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // google, facebook, etc.
+  providerId   String
+  createdAt    DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+// ==========================================
+// ESTRUCTURA ORGANIZATIVA
+// ==========================================
+
+model Company {
+  id            String        @id @default(cuid())
+  name          String
+  type          CompanyType   @default(FRANCHISE)
+  taxId         String?       // CIF/NIF
+  email         String?
+  phone         String?
+  website       String?
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  country       String        @default("España")
+  
+  // Configuración
+  logo          String?       // URL del logo
+  primaryColor  String?       // Color primario para personalización
+  isActive      Boolean       @default(true)
+  
+  // Configuración de reparto de leads
+  assignmentMethod  AssignmentMethod @default(ROUND_ROBIN)
+  
+  // Timestamps
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Relaciones
+  users         User[]
+  offices       Office[]
+  leads         Lead[]
+  documents     Document[]
+  works         Work[]
+  budgets       Budget[]
+  templates     DocumentTemplate[]
+  assignmentRules AssignmentRule[]
+  
+  // Catálogos y pedidos
+  productCategories     ProductCategory[]
+  materialProducts      MaterialProduct[]
+  merchProducts         MerchProduct[]
+  materialOrders        MaterialOrder[]
+  merchOrders           MerchOrder[]
+  certifications        Certification[]
+  subcontractorBudgets  SubcontractorBudget[]
+  profitShares          ProfitShare[]
+  catalogImports        CatalogImport[]
+  
+  // Nuevos módulos
+  employeeCertifications EmployeeCertification[]
+  contracts              Contract[]
+  documentLibrary        DocumentLibrary[]
+  documentAnalyses       DocumentAnalysis[]
+  externalLinks          ExternalLink[]
+  
+  @@index([type])
+}
+
+model Office {
+  id            String      @id @default(cuid())
+  companyId     String
+  name          String
+  code          String?     // Código de oficina
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  
+  // Zonas de cobertura
+  zones         String?     // JSON con lista de zonas/códigos postales
+  
+  // Configuración
+  isActive      Boolean     @default(true)
+  
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relaciones
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  teams         Team[]
+  users         User[]
+  leads         Lead[]
+  
+  @@index([companyId])
+}
+
+model Team {
+  id            String      @id @default(cuid())
+  officeId      String
+  name          String
+  description   String?
+  
+  // Configuración
+  isActive      Boolean     @default(true)
+  
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relaciones
+  office        Office      @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  users         User[]
+  leads         Lead[]
+  
+  @@index([officeId])
+}
+
+// ==========================================
+// LEADS (CORE DEL SISTEMA)
+// ==========================================
+
+model Lead {
+  id            String      @id @default(cuid())
+  
+  // Datos del lead
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String
+  alternativePhone String?
+  
+  // Ubicación
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  zone          String?     // Zona asignada
+  
+  // Clasificación
+  type          LeadType    @default(NEW_BUILD)
+  source        LeadSource  @default(WEB)
+  status        LeadStatus  @default(NEW)
+  
+  // Valoración
+  estimatedValue    Float?  // Valor estimado
+  probability       Int?    @default(50) // Probabilidad de cierre 0-100
+  priority          Int     @default(3)  // 1=Alta, 2=Media, 3=Baja
+  
+  // Descripción
+  description   String?     // Notas principales
+  requirements  String?     // Requisitos específicos
+  
+  // Presupuesto del cliente
+  budgetMin     Float?
+  budgetMax     Float?
+  
+  // Fechas importantes
+  preferredStartDate DateTime?
+  deadline          DateTime?
+  
+  // Relaciones organizativas
+  companyId     String
+  officeId      String?
+  teamId        String?
+  assignedToId  String?     // Comercial asignado
+  createdById   String      // Usuario que creó el lead
+  
+  // Cliente convertido
+  clientId      String?     // Si se convirtió en cliente
+  
+  // Información adicional
+  customFields  String?     // JSON con campos personalizados
+  
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  contactedAt   DateTime?   // Última fecha de contacto
+  closedAt      DateTime?   // Fecha de cierre
+  
+  // Relaciones
+  company       Company     @relation(fields: [companyId], references: [id])
+  office        Office?     @relation(fields: [officeId], references: [id])
+  team          Team?       @relation(fields: [teamId], references: [id])
+  assignedTo    User?       @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  createdBy     User        @relation("CreatedLeads", fields: [createdById], references: [id])
+  
+  // Historial y seguimiento
+  comments      LeadComment[]
+  activities    LeadActivity[]
+  documents     Document[]
+  tasks         Task[]
+  budgets       Budget[]
+  
+  // Obra asociada
+  work          Work?
+  
+  @@index([status])
+  @@index([type])
+  @@index([companyId])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+model LeadComment {
+  id            String      @id @default(cuid())
+  leadId        String
+  userId        String
+  content       String
+  
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relaciones
+  lead          Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id])
+  
+  @@index([leadId])
+  @@index([userId])
+}
+
+model LeadActivity {
+  id            String      @id @default(cuid())
+  leadId        String
+  userId        String?
+  
+  // Tipo de actividad
+  action        String      // created, updated, status_change, assigned, comment, etc.
+  description   String
+  oldValue      String?     // Valor anterior (para cambios de estado)
+  newValue      String?     // Valor nuevo
+  
+  // Metadata
+  metadata      String?     // JSON con información adicional
+  
+  // Timestamp
+  createdAt     DateTime    @default(now())
+  
+  // Relaciones
+  lead          Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user          User?       @relation(fields: [userId], references: [id])
+  
+  @@index([leadId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// CONFIGURACIÓN DE REPARTO DE LEADS
+// ==========================================
+
+model AssignmentConfig {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  maxLeads        Int             @default(50)    // Máximo de leads activos
+  currentLeads    Int             @default(0)     // Leads actuales asignados
+  weight          Int             @default(1)     // Peso para distribución
+  isActive        Boolean         @default(true)  // Si recibe leads
+  
+  // Zonas asignadas
+  zones           String?         // JSON con zonas
+  
+  // Tipos de lead que acepta
+  acceptedTypes   String?         // JSON con tipos aceptados
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AssignmentRule {
+  id              String          @id @default(cuid())
+  companyId       String
+  name            String
+  description     String?
+  
+  // Condiciones (JSON)
+  conditions      String          // Ej: {"zone": "Madrid", "type": "NEW_BUILD"}
+  
+  // Acción
+  method          AssignmentMethod
+  targetUserId    String?         // Para asignación manual directa
+  targetTeamId    String?
+  targetOfficeId  String?
+  
+  // Prioridad
+  priority        Int             @default(0)     // Mayor prioridad = se aplica primero
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+  @@index([priority])
+}
+
+// ==========================================
+// PRESUPUESTOS
+// ==========================================
+
+model Budget {
+  id              String      @id @default(cuid())
+  leadId          String
+  companyId       String
+  createdById     String
+  
+  // Datos del presupuesto
+  number          String?     // Número de presupuesto
+  title           String
+  description     String?
+  
+  // Importes
+  subtotal        Float       @default(0)
+  tax             Float       @default(0)
+  taxRate         Float       @default(21)
+  total           Float       @default(0)
+  
+  // Validez
+  validUntil      DateTime?
+  
+  // Estado
+  status          String      @default("draft") // draft, sent, accepted, rejected
+  
+  // Contenido (JSON con líneas de presupuesto)
+  lines           String?     // JSON con las líneas del presupuesto
+  
+  // PDF generado
+  pdfUrl          String?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  sentAt          DateTime?
+  acceptedAt      DateTime?
+  
+  // Relaciones
+  lead            Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company         Company     @relation(fields: [companyId], references: [id])
+  createdBy       User        @relation(fields: [createdById], references: [id])
+  
+  @@index([leadId])
+  @@index([companyId])
+}
+
+// ==========================================
+// DOCUMENTOS
+// ==========================================
+
+model Document {
+  id              String        @id @default(cuid())
+  companyId       String
+  uploadedById    String
+  
+  // Relación polimórfica
+  leadId          String?
+  workId          String?
+  
+  // Datos del documento
+  name            String
+  description     String?
+  type            DocumentType  @default(OTHER)
+  
+  // Archivo
+  fileName        String
+  filePath        String        // URL o ruta del archivo
+  fileSize        Int?
+  mimeType        String?
+  
+  // Metadatos
+  tags            String?       // JSON con tags
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relaciones
+  company         Company       @relation(fields: [companyId], references: [id])
+  uploadedBy      User          @relation(fields: [uploadedById], references: [id])
+  lead            Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  work            Work?         @relation(fields: [workId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+  @@index([leadId])
+  @@index([workId])
+  @@index([type])
+}
+
+model DocumentTemplate {
+  id              String        @id @default(cuid())
+  companyId       String
+  name            String
+  description     String?
+  type            DocumentType
+  
+  // Contenido
+  content         String?       // HTML o contenido base
+  variables       String?       // JSON con variables disponibles
+  
+  // Estado
+  isActive        Boolean       @default(true)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relaciones
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+  @@index([type])
+}
+
+// ==========================================
+// OBRAS
+// ==========================================
+
+model Work {
+  id              String      @id @default(cuid())
+  leadId          String      @unique
+  companyId       String
+  createdById     String      // Usuario que creó la obra
+  
+  // Datos de la obra
+  name            String
+  description     String?
+  reference       String?     // Referencia interna
+  
+  // Ubicación
+  address         String
+  city            String?
+  province        String?
+  postalCode      String?
+  
+  // Estado y fechas
+  status          WorkStatus  @default(PLANNING)
+  startDate       DateTime?
+  endDate         DateTime?
+  estimatedDays   Int?
+  
+  // Presupuesto
+  budget          Float?
+  actualCost      Float?
+  
+  // Progreso
+  progress        Int         @default(0)   // 0-100
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relaciones
+  lead            Lead        @relation(fields: [leadId], references: [id])
+  company         Company     @relation(fields: [companyId], references: [id])
+  createdBy       User        @relation("CreatedWorks", fields: [createdById], references: [id])
+  
+  // Subcontratas asignadas
+  subcontractors  WorkSubcontractor[]
+  
+  // Actualizaciones
+  updates         WorkUpdate[]
+  
+  // Documentos
+  documents       Document[]
+  
+  // Incidencias
+  incidents       Incident[]
+  
+  // Tareas
+  tasks           Task[]
+  
+  // Módulo de subcontratas
+  subcontractorTasks       SubcontractorTask[]
+  paymentPhases            SubcontractorPaymentPhase[]
+  subcontractorAdvances    SubcontractorAdvance[]
+  subcontractorWorkLogs    SubcontractorWorkLog[]
+  materialDeliveries       MaterialDelivery[]
+  
+  // Nuevos módulos
+  materialOrders           MaterialOrder[]
+  certifications           Certification[]
+  subcontractorBudgets     SubcontractorBudget[]
+  budgetComparisons        BudgetComparison[]
+  profitShares             ProfitShare[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([leadId])
+  @@index([createdById])
+}
+
+model WorkSubcontractor {
+  id              String      @id @default(cuid())
+  workId          String
+  subcontractorId String     // UserId del subcontratista
+  
+  // Datos de la asignación
+  role            String?     // Rol en la obra (electricista, fontanero, etc.)
+  description     String?
+  
+  // Fechas
+  startDate       DateTime?
+  endDate         DateTime?
+  
+  // Estado
+  status          String      @default("assigned") // assigned, in_progress, completed
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relaciones
+  work            Work        @relation(fields: [workId], references: [id], onDelete: Cascade)
+  
+  @@index([workId])
+  @@index([subcontractorId])
+}
+
+model WorkUpdate {
+  id              String      @id @default(cuid())
+  workId          String
+  userId          String
+  
+  // Contenido
+  title           String
+  description     String
+  
+  // Progreso
+  progressBefore  Int?
+  progressAfter   Int?
+  
+  // Archivos multimedia
+  photos          String?     // JSON con URLs de fotos
+  videos          String?     // JSON con URLs de videos
+  
+  // Timestamp
+  createdAt       DateTime    @default(now())
+  
+  // Relaciones
+  work            Work        @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id])
+  
+  @@index([workId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Incident {
+  id              String      @id @default(cuid())
+  workId          String
+  reportedById    String
+  
+  // Datos de la incidencia
+  title           String
+  description     String
+  severity        String      @default("medium") // low, medium, high, critical
+  
+  // Estado
+  status          String      @default("open") // open, in_progress, resolved, closed
+  
+  // Resolución
+  resolution      String?
+  resolvedAt      DateTime?
+  resolvedById    String?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relaciones
+  work            Work        @relation(fields: [workId], references: [id], onDelete: Cascade)
+  
+  @@index([workId])
+  @@index([status])
+  @@index([severity])
+}
+
+// ==========================================
+// TAREAS
+// ==========================================
+
+model Task {
+  id              String      @id @default(cuid())
+  
+  // Relación polimórfica
+  leadId          String?
+  workId          String?
+  
+  // Datos de la tarea
+  title           String
+  description     String?
+  
+  // Asignación
+  createdById     String
+  assignedToId    String?
+  
+  // Fechas
+  dueDate         DateTime?
+  completedAt     DateTime?
+  
+  // Prioridad y estado
+  priority        String      @default("medium") // low, medium, high
+  status          String      @default("pending") // pending, in_progress, completed, cancelled
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relaciones
+  lead            Lead?       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  work            Work?       @relation(fields: [workId], references: [id], onDelete: Cascade)
+  createdBy       User        @relation(fields: [createdById], references: [id])
+  assignedTo      User?       @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  
+  @@index([leadId])
+  @@index([workId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ==========================================
+// NOTIFICACIONES
+// ==========================================
+
+model Notification {
+  id              String            @id @default(cuid())
+  userId          String
+  
+  // Tipo y contenido
+  type            NotificationType
+  title           String
+  message         String
+  
+  // Referencia (opcional)
+  referenceType   String?           // lead, work, task, etc.
+  referenceId     String?
+  
+  // Estado
+  isRead          Boolean           @default(false)
+  readAt          DateTime?
+  
+  // Canales
+  sentEmail       Boolean           @default(false)
+  sentWhatsapp    Boolean           @default(false)
+  
+  // Timestamp
+  createdAt       DateTime          @default(now())
+  
+  // Relaciones
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ==========================================
+// LOGS DE ACTIVIDAD
+// ==========================================
+
+model ActivityLog {
+  id              String      @id @default(cuid())
+  userId          String?
+  
+  // Acción
+  action          String      // login, logout, create_lead, update_lead, etc.
+  entity          String?     // lead, user, work, etc.
+  entityId        String?
+  
+  // Detalles
+  description     String
+  ipAddress       String?
+  userAgent       String?
+  
+  // Cambios (JSON)
+  oldValue        String?
+  newValue        String?
+  
+  // Timestamp
+  createdAt       DateTime    @default(now())
+  
+  // Relaciones
+  user            User?       @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+// ==========================================
+// CONFIGURACIÓN DEL SISTEMA
+// ==========================================
+
+model SystemConfig {
+  id              String      @id @default(cuid())
+  key             String      @unique
+  value           String
+  description     String?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ==========================================
+// ESTADÍSTICAS AGREGADAS (para dashboards)
+// ==========================================
+
+model DailyStats {
+  id              String      @id @default(cuid())
+  date            DateTime
+  companyId       String?
+  officeId        String?
+  userId          String?
+  
+  // Métricas de leads
+  newLeads        Int         @default(0)
+  contactedLeads  Int         @default(0)
+  visitedLeads    Int         @default(0)
+  offeredLeads    Int         @default(0)
+  closedLeads     Int         @default(0)
+  lostLeads       Int         @default(0)
+  
+  // Valores
+  totalValue      Float       @default(0)
+  closedValue     Float       @default(0)
+  
+  // Timestamp
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([date, companyId, officeId, userId])
+  @@index([date])
+  @@index([companyId])
+  @@index([userId])
+}
+
+// ==========================================
+// MÓDULO DE FÁBRICA / PRODUCCIÓN
+// ==========================================
+
+enum ProductionOrderStatus {
+  PENDING       // Pendiente
+  IN_PROGRESS   // En producción
+  QUALITY_CHECK // Control de calidad
+  READY         // Listo para envío
+  SHIPPED       // Enviado
+  DELIVERED     // Entregado
+  CANCELLED     // Cancelado
+}
+
+enum ProductionPhase {
+  CUTTING       // Corte
+  ASSEMBLY      // Ensamblaje
+  WELDING       // Soldadura
+  PAINTING      // Pintura
+  FINISHING     // Acabado
+  QUALITY       // Control de calidad
+  PACKAGING     // Embalaje
+}
+
+model ProductionOrder {
+  id              String                @id @default(cuid())
+  companyId       String
+  workId          String?               // Obra relacionada (opcional)
+  leadId          String?               // Lead relacionado (opcional)
+  
+  // Datos del pedido
+  orderNumber     String                // Número de pedido interno
+  reference       String?               // Referencia externa
+  name            String                // Nombre del pedido
+  description     String?
+  
+  // Cliente
+  clientName      String?
+  clientPhone     String?
+  clientAddress   String?
+  clientCity      String?
+  
+  // Estado y prioridad
+  status          ProductionOrderStatus @default(PENDING)
+  priority        Int                   @default(3)  // 1=Urgente, 2=Alta, 3=Normal, 4=Baja
+  currentPhase    ProductionPhase?
+  
+  // Fechas
+  orderDate       DateTime              @default(now())
+  dueDate         DateTime?
+  startDate       DateTime?
+  completedDate   DateTime?
+  shippedDate     DateTime?
+  deliveredDate   DateTime?
+  
+  // Cantidades y medidas
+  quantity        Int                   @default(1)
+  unit            String?               // unidad, m2, ml, etc.
+  dimensions      String?               // JSON con dimensiones
+  weight          Float?                // Peso en kg
+  
+  // Costes
+  estimatedCost   Float?
+  actualCost      Float?
+  
+  // Progreso
+  progress        Int                   @default(0)  // 0-100
+  
+  // Notas
+  notes           String?
+  internalNotes   String?
+  
+  // Timestamps
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  // Relaciones
+  activities      ProductionActivity[]
+  materials       ProductionMaterial[]
+  shipments       Shipment[]
+  timeline        ProductionTimeline[]
+  photos          ProductionPhoto[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([orderDate])
+  @@index([dueDate])
+}
+
+model ProductionActivity {
+  id              String          @id @default(cuid())
+  productionOrderId String
+  
+  // Datos de la actividad
+  userId          String?         // Trabajador
+  phase           ProductionPhase
+  activity        String          // Qué se hizo
+  description     String?
+  
+  // Tiempos
+  startTime       DateTime
+  endTime         DateTime?
+  durationMinutes Int?            // Duración calculada
+  
+  // Cantidad producida
+  quantity        Int?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  
+  @@index([productionOrderId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ProductionMaterial {
+  id              String          @id @default(cuid())
+  productionOrderId String
+  
+  // Datos del material
+  name            String
+  description     String?
+  code            String?         // Código interno
+  
+  // Cantidades
+  quantityUsed    Float
+  unit            String          // kg, m, unidades, etc.
+  unitCost        Float?
+  totalCost       Float?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  
+  @@index([productionOrderId])
+}
+
+model Shipment {
+  id              String          @id @default(cuid())
+  productionOrderId String
+  companyId       String
+  
+  // Datos del envío
+  shipmentNumber  String          // Número de albarán
+  driverName      String?
+  driverPhone     String?
+  vehicleRegistration String?     // Matrícula
+  
+  // Destino
+  destinationName String?
+  destinationAddress String?
+  destinationCity String?
+  destinationPostalCode String?
+  
+  // Estado
+  status          String          @default("preparing") // preparing, loaded, in_transit, delivered
+  
+  // Fechas
+  loadingDate     DateTime?
+  shipmentDate    DateTime?
+  deliveryDate    DateTime?
+  
+  // Contenido
+  content         String?         // JSON con lista de contenido
+  notes           String?
+  
+  // Fotos
+  photos          String?         // JSON con URLs de fotos de carga
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  
+  @@index([companyId])
+  @@index([productionOrderId])
+  @@index([status])
+}
+
+model ProductionTimeline {
+  id              String          @id @default(cuid())
+  productionOrderId String
+  userId          String?
+  
+  // Evento
+  event           String          // created, status_change, phase_change, note, etc.
+  description     String
+  oldValue        String?
+  newValue        String?
+  
+  // Metadata
+  metadata        String?         // JSON con información adicional
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  
+  @@index([productionOrderId])
+  @@index([createdAt])
+}
+
+model ProductionPhoto {
+  id              String          @id @default(cuid())
+  productionOrderId String
+  uploadedById    String
+  
+  // Datos de la foto
+  title           String?
+  description     String?
+  url             String          // URL de la imagen
+  
+  // Tipo
+  type            String          @default("production") // production, quality, loading, delivery
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  
+  @@index([productionOrderId])
+  @@index([type])
+}
+
+// ==========================================
+// SISTEMA DE COMISIONES
+// ==========================================
+
+enum CommissionStatus {
+  PENDING        // Pendiente de cobro
+  APPROVED       // Aprobada
+  PAID           // Pagada
+  CANCELLED      // Cancelada
+}
+
+enum CommissionType {
+  SALE           // Por venta
+  MARGIN         // Por margen
+  REFERRAL       // Por referido
+  BONUS          // Bonus extra
+  FRANCHISE      // Franquicia
+  REAL_ESTATE    // Inmobiliaria
+}
+
+model CommissionConfig {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Ámbito de la comisión
+  userId          String?         // Para comercial específico
+  roleId          String?         // Para rol (COMMERCIAL, FRANCHISE, etc.)
+  
+  // Tipo de cálculo
+  type            CommissionType  @default(SALE)
+  
+  // Valores
+  percentage      Float?          // Porcentaje de comisión
+  fixedAmount     Float?          // Cantidad fija
+  
+  // Condiciones
+  minAmount       Float?          // Importe mínimo
+  maxAmount       Float?          // Importe máximo
+  validFrom       DateTime?
+  validUntil      DateTime?
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([userId])
+}
+
+model Commission {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Beneficiario
+  userId          String          // Usuario que recibe la comisión
+  
+  // Origen de la comisión
+  leadId          String?         // Lead que generó la comisión
+  workId          String?         // Obra relacionada
+  budgetId        String?         // Presupuesto relacionado
+  
+  // Tipo y cálculo
+  type            CommissionType  @default(SALE)
+  baseAmount      Float           // Importe base de la venta
+  percentage      Float?          // Porcentaje aplicado
+  amount          Float           // Cantidad de comisión
+  
+  // Estado
+  status          CommissionStatus @default(PENDING)
+  
+  // Fechas
+  saleDate        DateTime?       // Fecha de la venta
+  approvedAt      DateTime?       // Fecha de aprobación
+  paidAt          DateTime?       // Fecha de pago
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ==========================================
+// SISTEMA GAMIFICADO
+// ==========================================
+
+enum AchievementType {
+  SALES          // Ventas
+  LEADS          // Leads
+  CONVERSION     // Conversión
+  ACTIVITY       // Actividad
+  WORKS          // Obras
+  PRODUCTION     // Producción
+  TEAM           // Equipo
+  SPECIAL        // Especial
+}
+
+model Achievement {
+  id              String          @id @default(cuid())
+  companyId       String?
+  
+  // Datos del logro
+  name            String
+  description     String
+  icon            String?         // Emoji o nombre de icono
+  
+  // Tipo y categoría
+  type            AchievementType @default(SALES)
+  category        String?         // bronze, silver, gold, platinum
+  
+  // Requisitos
+  requirement     String          // JSON con los requisitos
+  points          Int             @default(0)  // Puntos que otorga
+  
+  // Visibilidad
+  isActive        Boolean         @default(true)
+  isPublic        Boolean         @default(true)
+  
+  // Relaciones
+  userAchievements UserAchievement[]
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([type])
+  @@index([companyId])
+}
+
+model UserAchievement {
+  id              String          @id @default(cuid())
+  userId          String
+  achievementId   String
+  
+  // Datos
+  unlockedAt      DateTime        @default(now())
+  progress        Int             @default(100)  // Porcentaje de progreso
+  
+  // Notificación
+  notifiedAt      DateTime?
+  
+  // Relaciones
+  achievement     Achievement     @relation(fields: [achievementId], references: [id])
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+model UserPoints {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  companyId       String?
+  
+  // Puntos
+  totalPoints     Int             @default(0)
+  monthlyPoints   Int             @default(0)
+  weeklyPoints    Int             @default(0)
+  
+  // Ranking
+  globalRank      Int?
+  companyRank     Int?
+  teamRank        Int?
+  
+  // Timestamps
+  lastUpdated     DateTime        @default(now())
+  
+  @@index([companyId])
+  @@index([totalPoints])
+}
+
+model Leaderboard {
+  id              String          @id @default(cuid())
+  companyId       String?
+  type            String          // global, company, team, office
+  scopeId         String?         // ID de la empresa/equipo/oficina
+  
+  // Período
+  period          String          // daily, weekly, monthly, yearly, all_time
+  periodStart     DateTime
+  periodEnd       DateTime?
+  
+  // Datos (JSON con ranking)
+  rankings        String          // JSON con [{userId, points, position}]
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([type])
+  @@index([period])
+}
+
+// ==========================================
+// SISTEMA DE ALERTAS INTELIGENTES
+// ==========================================
+
+enum AlertType {
+  LEAD_COLD       // Lead sin contacto
+  LEAD_HOT        // Lead caliente sin seguimiento
+  LOW_PERFORMANCE // Bajo rendimiento
+  WORK_DELAY      // Obra retrasada
+  PRODUCTION_SLOW // Producción lenta
+  TASK_OVERDUE    // Tarea vencida
+  COMMISSION_DUE  // Comisión pendiente
+  SYSTEM          // Sistema
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Alert {
+  id              String          @id @default(cuid())
+  companyId       String?
+  
+  // Tipo y severidad
+  type            AlertType
+  severity        AlertSeverity   @default(WARNING)
+  
+  // Contenido
+  title           String
+  message         String
+  
+  // Referencia
+  referenceType   String?         // lead, work, user, production, etc.
+  referenceId     String?
+  
+  // Destinatarios
+  targetUserId    String?         // Usuario específico
+  targetRoleId    String?         // Rol específico
+  isGlobal        Boolean         @default(false)
+  
+  // Estado
+  isRead          Boolean         @default(false)
+  readAt          DateTime?
+  isResolved      Boolean         @default(false)
+  resolvedAt      DateTime?
+  resolvedById    String?
+  
+  // Notificaciones enviadas
+  sentEmail       Boolean         @default(false)
+  sentWhatsapp    Boolean         @default(false)
+  sentTelegram    Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([type])
+  @@index([severity])
+  @@index([companyId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model AlertRule {
+  id              String          @id @default(cuid())
+  companyId       String?
+  
+  // Datos de la regla
+  name            String
+  description     String?
+  
+  // Tipo de alerta
+  type            AlertType
+  severity        AlertSeverity   @default(WARNING)
+  
+  // Condiciones (JSON)
+  conditions      String          // Ej: {"days_without_contact": 5}
+  
+  // Acciones
+  notifyEmail     Boolean         @default(true)
+  notifyWhatsapp  Boolean         @default(false)
+  notifyTelegram  Boolean         @default(false)
+  notifyPush      Boolean         @default(true)
+  
+  // Destinatarios
+  notifyUser      Boolean         @default(true)  // Usuario afectado
+  notifyManager   Boolean         @default(true)  // Su jefe
+  notifyAdmin     Boolean         @default(false) // Admins
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([type])
+  @@index([companyId])
+}
+
+// ==========================================
+// TIMELINE GLOBAL (TIPO CHAT)
+// ==========================================
+
+enum TimelineEntryType {
+  NOTE            // Nota manual
+  CALL            // Llamada
+  EMAIL           // Email
+  WHATSAPP        // WhatsApp
+  MEETING         // Reunión
+  STATUS_CHANGE   // Cambio de estado
+  FILE            // Archivo
+  PHOTO           // Foto
+  VIDEO           // Video
+  SYSTEM          // Automático del sistema
+}
+
+model TimelineEntry {
+  id              String              @id @default(cuid())
+  companyId       String
+  
+  // Referencia (polimórfica)
+  entityType      String              // lead, work, client, production
+  entityId        String
+  
+  // Datos de la entrada
+  type            TimelineEntryType   @default(NOTE)
+  title           String?
+  content         String
+  
+  // Autor
+  userId          String
+  
+  // Metadata
+  metadata        String?             // JSON con información adicional
+  
+  // Archivos adjuntos
+  attachments     String?             // JSON con URLs de archivos
+  
+  // Timestamp
+  createdAt       DateTime            @default(now())
+  
+  @@index([entityType])
+  @@index([entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// IA Y SCORING
+// ==========================================
+
+model LeadScore {
+  id              String          @id @default(cuid())
+  leadId          String          @unique
+  
+  // Scores
+  overallScore    Int             @default(0)  // 0-100
+  probabilityToClose Float        @default(0)  // 0-1
+  
+  // Factores individuales (0-100)
+  engagementScore Int             @default(0)  // Interacción
+  budgetScore     Int             @default(0)  // Presupuesto
+  timingScore     Int             @default(0)  // Timing
+  sourceScore     Int             @default(0)  // Fuente
+  profileScore    Int             @default(0)  // Perfil del cliente
+  
+  // Predicciones
+  predictedCloseDate DateTime?
+  predictedValue     Float?
+  
+  // Recomendaciones
+  recommendations String?         // JSON con recomendaciones
+  
+  // Última actualización
+  lastCalculated  DateTime        @default(now())
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([overallScore])
+  @@index([probabilityToClose])
+}
+
+model SalesPrediction {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Período
+  period          String          // week, month, quarter, year
+  periodStart     DateTime
+  periodEnd       DateTime
+  
+  // Predicciones
+  predictedLeads      Int
+  predictedSales      Int
+  predictedRevenue    Float
+  
+  // Valores reales (actualizados después)
+  actualLeads         Int?
+  actualSales         Int?
+  actualRevenue       Float?
+  
+  // Precisión
+  accuracyPercentage  Float?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([period])
+}
+
+model AIInteraction {
+  id              String          @id @default(cuid())
+  userId          String
+  companyId       String
+  
+  // Datos de la interacción
+  question        String
+  answer          String
+  
+  // Contexto
+  contextType     String?         // lead, work, stats, etc.
+  contextId       String?
+  
+  // Feedback
+  rating          Int?            // 1-5
+  feedback        String?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  @@index([userId])
+  @@index([companyId])
+}
+
+// ==========================================
+// IMPORTACIÓN / EXPORTACIÓN
+// ==========================================
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ERROR
+}
+
+enum ExportFormat {
+  CSV
+  EXCEL
+  PDF
+  JSON
+}
+
+model ImportJob {
+  id              String          @id @default(cuid())
+  companyId       String
+  userId          String
+  
+  // Datos del archivo
+  fileName        String
+  fileSize        Int
+  fileUrl         String?
+  
+  // Tipo de importación
+  entityType      String          // leads, users, clients, etc.
+  
+  // Mapeo de columnas
+  columnMapping   String?         // JSON con mapeo
+  
+  // Estado
+  status          ImportStatus    @default(PENDING)
+  totalRows       Int             @default(0)
+  processedRows   Int             @default(0)
+  successRows     Int             @default(0)
+  errorRows       Int             @default(0)
+  
+  // Errores
+  errors          String?         // JSON con lista de errores
+  
+  // Opciones
+  skipDuplicates  Boolean         @default(true)
+  autoAssign      Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  @@index([companyId])
+  @@index([status])
+}
+
+model ExportJob {
+  id              String          @id @default(cuid())
+  companyId       String
+  userId          String
+  
+  // Datos de la exportación
+  name            String?
+  entityType      String          // leads, stats, commissions, etc.
+  format          ExportFormat    @default(EXCEL)
+  
+  // Filtros aplicados
+  filters         String?         // JSON con filtros
+  
+  // Archivo generado
+  fileUrl         String?
+  fileSize        Int?
+  rowCount        Int?
+  
+  // Estado
+  status          ImportStatus    @default(PENDING)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  expiresAt       DateTime?
+  
+  @@index([companyId])
+  @@index([status])
+}
+
+// ==========================================
+// AUTOMATIZACIONES / WORKFLOWS
+// ==========================================
+
+enum WorkflowTrigger {
+  LEAD_CREATED
+  LEAD_STATUS_CHANGE
+  WORK_CREATED
+  WORK_STATUS_CHANGE
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  TIME_BASED
+  MANUAL
+}
+
+enum WorkflowAction {
+  SEND_EMAIL
+  SEND_WHATSAPP
+  CREATE_TASK
+  ASSIGN_LEAD
+  UPDATE_STATUS
+  CREATE_NOTIFICATION
+  WEBHOOK
+}
+
+model Workflow {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Datos del workflow
+  name            String
+  description     String?
+  
+  // Trigger
+  trigger         WorkflowTrigger
+  triggerConfig   String?         // JSON con configuración del trigger
+  
+  // Condiciones
+  conditions      String?         // JSON con condiciones
+  
+  // Acciones
+  actions         String          // JSON con lista de acciones
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Estadísticas
+  executions      Int             @default(0)
+  lastExecutedAt  DateTime?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([trigger])
+}
+
+model WorkflowExecution {
+  id              String          @id @default(cuid())
+  workflowId      String
+  
+  // Referencia
+  entityType      String?
+  entityId        String?
+  
+  // Estado
+  status          String          @default("pending") // pending, running, completed, failed
+  
+  // Resultado
+  result          String?         // JSON con resultado
+  
+  // Error
+  errorMessage    String?
+  
+  // Timestamps
+  startedAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  @@index([workflowId])
+  @@index([status])
+}
+
+// ==========================================
+// INTEGRACIONES
+// ==========================================
+
+enum IntegrationType {
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+  GOOGLE_CALENDAR
+  GOOGLE_SHEETS
+  ZAPIER
+  MAKE
+  WEBHOOK
+  CUSTOM
+}
+
+model Integration {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Datos de la integración
+  type            IntegrationType
+  name            String
+  description     String?
+  
+  // Configuración
+  config          String?         // JSON con configuración (tokens, etc.)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  lastSyncAt      DateTime?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([type])
+}
+
+model IntegrationLog {
+  id              String          @id @default(cuid())
+  integrationId   String
+  
+  // Datos del log
+  action          String
+  request         String?         // JSON
+  response        String?         // JSON
+  
+  // Estado
+  status          String          // success, error
+  errorMessage    String?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  @@index([integrationId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// MÓDULO DE SUBCONTRATAS AVANZADO
+// ==========================================
+
+enum PhaseStatus {
+  PENDING       // Pendiente de inicio
+  IN_PROGRESS   // En ejecución
+  COMPLETED     // Completada
+  VALIDATED     // Validada por admin/jefe de obra
+  PAID          // Pagada
+}
+
+enum GuaranteeType {
+  BANK_GUARANTEE   // Aval bancario
+  SURETY_INSURANCE // Seguro de caución
+  PROMISSORY_NOTE  // Pagaré
+  NONE             // Sin garantía
+}
+
+enum ContractStatus {
+  DRAFT          // Borrador
+  PENDING_SIGN   // Pendiente de firma
+  SIGNED         // Firmado
+  ACTIVE         // Activo
+  COMPLETED      // Completado
+  CANCELLED      // Cancelado
+}
+
+enum PenaltyType {
+  DELAY          // Retraso
+  INACTIVITY     // Inactividad
+  BREACH         // Incumplimiento
+  QUALITY        // Calidad deficiente
+}
+
+enum SubcontractorTaskStatus {
+  ASSIGNED       // Asignada
+  IN_PROGRESS    // En progreso
+  COMPLETED      // Completada
+  VALIDATED      // Validada
+  REJECTED       // Rechazada
+}
+
+// Perfil extendido de subcontrata
+model SubcontractorProfile {
+  id                  String          @id @default(cuid())
+  userId              String          @unique
+  companyId           String?
+  
+  // Datos de la subcontrata
+  businessName        String?         // Razón social
+  taxId               String?         // CIF/NIF
+  specialty           String?         // Especialidad (electricista, fontanero, etc.)
+  skills              String?         // JSON con lista de habilidades
+  
+  // Documentación
+  insuranceExpiration DateTime?       // Seguro de responsabilidad civil
+  licenseExpiration   DateTime?       // Licencia/carnet
+  
+  // Configuración de pagos
+  maxAdvancePercent   Float           @default(10)  // Máximo % anticipo permitido
+  paymentTerms        Int             @default(30)  // Días de pago
+  bankAccount         String?
+  
+  // Ranking y métricas
+  rating              Float           @default(0)   // Valoración 0-5
+  totalWorks          Int             @default(0)   // Total de obras
+  completedWorks      Int             @default(0)   // Obras completadas
+  onTimeRate          Float           @default(0)   // % cumplimiento plazos
+  qualityScore        Float           @default(0)   // Puntuación calidad
+  
+  // Penalizaciones acumuladas
+  totalPenalties      Float           @default(0)   // Total penalizaciones en €
+  penaltyCount        Int             @default(0)   // Número de penalizaciones
+  
+  // Estado
+  isActive            Boolean         @default(true)
+  isVerified          Boolean         @default(false)  // Verificado por admin
+  
+  // Timestamps
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  
+  // Relaciones
+  tasks               SubcontractorTask[]
+  contracts           SubcontractorContract[]
+  paymentPhases       SubcontractorPaymentPhase[]
+  advances            SubcontractorAdvance[]
+  penalties           SubcontractorPenalty[]
+  invoices            SubcontractorInvoice[]
+  workLogs            SubcontractorWorkLog[]
+  materialDeliveries  MaterialDelivery[]
+  rankingHistory      SubcontractorRankingHistory[]
+  
+  @@index([userId])
+  @@index([companyId])
+  @@index([rating])
+}
+
+// Asignación de tarea a subcontrata
+model SubcontractorTask {
+  id                  String                  @id @default(cuid())
+  workId              String
+  subcontractorId     String
+  
+  // Datos de la tarea
+  title               String
+  description         String?
+  category            String?                 // estructura, cerramientos, instalaciones, etc.
+  
+  // Fechas
+  assignedAt          DateTime                @default(now())
+  startDate           DateTime?
+  estimatedEndDate    DateTime?
+  completedAt         DateTime?
+  validatedAt         DateTime?
+  
+  // Estado
+  status              SubcontractorTaskStatus @default(ASSIGNED)
+  
+  // Importes
+  agreedAmount        Float?
+  
+  // Progreso
+  progress            Int                     @default(0)  // 0-100
+  
+  // Timestamps
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  
+  // Relaciones
+  work                Work                    @relation(fields: [workId], references: [id], onDelete: Cascade)
+  subcontractor       SubcontractorProfile    @relation(fields: [subcontractorId], references: [id])
+  validations         TaskValidation[]
+  evidences           TaskEvidence[]
+  paymentPhases       SubcontractorPaymentPhase[]
+  
+  @@index([workId])
+  @@index([subcontractorId])
+  @@index([status])
+}
+
+// Evidencias de trabajo (fotos, vídeos)
+model TaskEvidence {
+  id                  String              @id @default(cuid())
+  taskId              String
+  uploadedById        String              // Quién sube (subcontrata o validador)
+  
+  // Datos de la evidencia
+  type                String              // photo, video, document
+  url                 String              // URL del archivo
+  description         String?
+  
+  // Metadatos
+  takenAt             DateTime?           // Fecha/hora de captura
+  location            String?             // JSON con coordenadas GPS
+  
+  // Timestamp
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  task                SubcontractorTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  @@index([taskId])
+  @@index([type])
+}
+
+// Validación de tarea
+model TaskValidation {
+  id                  String              @id @default(cuid())
+  taskId              String
+  validatedById       String              // Admin o jefe de obra
+  
+  // Datos de validación
+  status              String              // approved, rejected, needs_revision
+  comments            String?
+  
+  // Checklist (JSON con items verificados)
+  checklistResults    String?
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  task                SubcontractorTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  @@index([taskId])
+  @@index([validatedById])
+}
+
+// Fase de pago
+model SubcontractorPaymentPhase {
+  id                  String              @id @default(cuid())
+  taskId              String?
+  subcontractorId     String
+  workId              String
+  
+  // Datos de la fase
+  name                String              // "Fase 1: Inicio", "Fase 2: Avance 50%", etc.
+  description         String?
+  phaseOrder          Int                 @default(1)  // Orden de la fase
+  
+  // Importes
+  totalAmount         Float               // Importe total de la fase
+  paymentPercent      Float               // % del total que representa
+  
+  // Estado
+  status              PhaseStatus         @default(PENDING)
+  
+  // Fechas
+  startDate           DateTime?
+  completedDate       DateTime?
+  validatedDate       DateTime?
+  paidDate            DateTime?
+  
+  // Validación
+  validatedById       String?
+  validationComments String?
+  
+  // Pago
+  paymentReference    String?             // Referencia del pago
+  invoiceId           String?             // Factura asociada
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  work                Work                @relation(fields: [workId], references: [id])
+  task                SubcontractorTask?  @relation(fields: [taskId], references: [id])
+  
+  @@index([taskId])
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([status])
+}
+
+// Anticipo controlado
+model SubcontractorAdvance {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String
+  contractId          String?
+  
+  // Datos del anticipo
+  amount              Float
+  percent             Float               // % del total
+  reason              String?
+  
+  // Garantía
+  guaranteeType       GuaranteeType       @default(NONE)
+  guaranteeDocument   String?             // URL del documento de garantía
+  guaranteeExpiration DateTime?
+  
+  // Estado
+  isApproved          Boolean             @default(false)
+  approvedById        String?
+  approvedAt          DateTime?
+  
+  // Recuperación
+  isRecovered         Boolean             @default(false)
+  recoveredAt         DateTime?
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  work                Work                @relation(fields: [workId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([isApproved])
+}
+
+// Contrato inteligente
+model SubcontractorContract {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String?
+  taskId              String?
+  
+  // Datos del contrato
+  contractNumber      String
+  title               String
+  description         String?
+  
+  // Importes
+  totalAmount         Float
+  currency            String              @default("EUR")
+  
+  // Fechas
+  startDate           DateTime
+  endDate             DateTime?
+  
+  // Cláusulas automáticas (JSON)
+  clauses             String?             // JSON con cláusulas configurables
+  
+  // Penalizaciones automáticas
+  delayPenaltyPerDay  Float?              // € por día de retraso
+  inactivityPenalty   Float?              // Penalización por inactividad
+  breachPenalty       Float?              // Penalización por incumplimiento
+  
+  // Firma digital
+  signedBySubcontractor Boolean          @default(false)
+  signedBySubcontractorAt DateTime?
+  signedByCompany     Boolean             @default(false)
+  signedByCompanyAt   DateTime?
+  signedByCompanyId   String?
+  
+  // Documento
+  documentUrl         String?             // PDF del contrato
+  
+  // Estado
+  status              ContractStatus      @default(DRAFT)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([status])
+}
+
+// Penalización
+model SubcontractorPenalty {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String?
+  taskId              String?
+  contractId          String?
+  
+  // Datos de la penalización
+  type                PenaltyType
+  reason              String
+  description         String?
+  
+  // Importe
+  amount              Float
+  appliedToPaymentId  String?             // ID del pago al que se descontó
+  
+  // Días/magnitud
+  days                Int?                // Días de retraso, etc.
+  
+  // Estado
+  isApplied           Boolean             @default(false)
+  appliedAt           DateTime?
+  
+  // Disputa
+  isDisputed          Boolean             @default(false)
+  disputeReason       String?
+  disputeResolvedAt   DateTime?
+  disputeResult       String?
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([type])
+  @@index([isApplied])
+}
+
+// Factura de subcontrata (controlada)
+model SubcontractorInvoice {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String?
+  
+  // Datos de factura
+  invoiceNumber       String
+  issueDate           DateTime
+  dueDate             DateTime?
+  
+  // Importes
+  subtotal            Float
+  tax                 Float
+  taxRate             Float               @default(21)
+  total               Float
+  
+  // Penizaciones aplicadas
+  penaltiesDeducted   Float               @default(0)
+  
+  // Solo se puede generar desde fases aprobadas
+  generatedFromPhases String?             // JSON con IDs de fases validadas
+  
+  // Estado
+  status              String              @default("pending") // pending, approved, paid, cancelled
+  
+  // Pago
+  paidAt              DateTime?
+  paymentReference    String?
+  
+  // Documento
+  documentUrl         String?
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([status])
+}
+
+// Registro de actividad en obra (fichaje/logística)
+model SubcontractorWorkLog {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String
+  
+  // Tipo de registro
+  type                String              // check_in, check_out, delivery, incident
+  
+  // Datos
+  notes               String?
+  
+  // Ubicación
+  latitude            Float?
+  longitude           Float?
+  
+  // Equipos/personas
+  teamSize            Int?
+  equipment           String?             // JSON con equipos presentes
+  
+  // Tiempos
+  checkInAt           DateTime?
+  checkOutAt          DateTime?
+  hoursWorked         Float?
+  
+  // Timestamp
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  work                Work                @relation(fields: [workId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Entrega de materiales
+model MaterialDelivery {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  workId              String
+  
+  // Datos de entrega
+  deliveryNumber      String
+  supplier            String?
+  
+  // Contenido (JSON)
+  materials           String              // JSON con lista de materiales
+  
+  // Estado
+  status              String              @default("pending") // pending, received, verified
+  
+  // Fechas
+  deliveryDate        DateTime?
+  receivedAt          DateTime?
+  verifiedAt          DateTime?
+  verifiedById        String?
+  
+  // Documentación
+  invoiceUrl          String?             // Factura del proveedor
+  photos              String?             // JSON con URLs de fotos
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  work                Work                @relation(fields: [workId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([workId])
+  @@index([status])
+}
+
+// Historial de ranking de subcontrata
+model SubcontractorRankingHistory {
+  id                  String              @id @default(cuid())
+  subcontractorId     String
+  
+  // Período
+  period              String              // "2024-01", "2024-Q1", etc.
+  periodType          String              // monthly, quarterly, yearly
+  
+  // Métricas del período
+  worksCompleted      Int                 @default(0)
+  worksOnTime         Int                 @default(0)
+  averageQuality      Float               @default(0)
+  totalPenalties      Float               @default(0)
+  
+  // Puntuación
+  score               Float               @default(0)
+  rank                Int?
+  
+  // Timestamp
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  subcontractor       SubcontractorProfile @relation(fields: [subcontractorId], references: [id])
+  
+  @@index([subcontractorId])
+  @@index([period])
+}
+
+// Plantilla de contrato
+model ContractTemplate {
+  id                  String              @id @default(cuid())
+  companyId           String
+  
+  // Datos
+  name                String
+  description         String?
+  
+  // Contenido
+  content             String              // HTML del contrato
+  clauses             String?             // JSON con cláusulas por defecto
+  
+  // Configuración de penalizaciones por defecto
+  defaultDelayPenalty Float?
+  defaultInactivityPenalty Float?
+  defaultBreachPenalty Float?
+  
+  // Estado
+  isActive            Boolean             @default(true)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@index([companyId])
+}
+
+// Checklist de validación por fase
+model ValidationChecklist {
+  id                  String              @id @default(cuid())
+  companyId           String
+  
+  // Datos
+  name                String
+  category            String              // estructura, cerramientos, instalaciones, etc.
+  description         String?
+  
+  // Items del checklist (JSON)
+  items               String              // JSON con [{id, label, required, type}]
+  
+  // Estado
+  isActive            Boolean             @default(true)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@index([companyId])
+  @@index([category])
+}
+
+// ==========================================
+// ASISTENTE AI INTEGRADO
+// ==========================================
+
+model AIChatSession {
+  id                  String              @id @default(cuid())
+  userId              String
+  
+  // Datos de la sesión
+  title               String?             // Título opcional de la conversación
+  
+  // Contexto
+  context             String?             // JSON con contexto del CRM (lead actual, obra, etc.)
+  
+  // Estado
+  isActive            Boolean             @default(true)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relaciones
+  messages            AIChatMessage[]
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AIChatMessage {
+  id                  String              @id @default(cuid())
+  sessionId           String
+  
+  // Remitente
+  role                String              // "user" o "assistant"
+  
+  // Contenido
+  content             String
+  
+  // Metadata
+  metadata            String?             // JSON con información adicional (tokens, modelo, etc.)
+  
+  // Timestamp
+  createdAt           DateTime            @default(now())
+  
+  // Relaciones
+  session             AIChatSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// CONTROL DE HORAS DE TRABAJADORES
+// ==========================================
+
+enum TimeEntryType {
+  WORK            // Trabajo normal
+  OVERTIME        // Horas extra
+  VACATION        // Vacaciones
+  SICK_LEAVE      // Baja médica
+  HOLIDAY         // Festivo
+  PERMISSION      // Permiso
+}
+
+model WorkerTimeLog {
+  id              String          @id @default(cuid())
+  userId          String
+  companyId       String
+  workId          String?         // Obra asignada (opcional)
+  
+  // Tipo de entrada
+  type            TimeEntryType   @default(WORK)
+  
+  // Fechas y horas
+  date            DateTime        // Fecha del trabajo
+  checkIn         DateTime?       // Hora de entrada
+  checkOut        DateTime?       // Hora de salida
+  
+  // Horas calculadas
+  hoursWorked     Float           @default(0)
+  overtimeHours   Float           @default(0)
+  
+  // Ubicación del fichaje
+  checkInLocation String?         // JSON con coordenadas
+  checkOutLocation String?        // JSON con coordenadas
+  
+  // Notas
+  notes           String?
+  
+  // Aprobación
+  isApproved      Boolean         @default(false)
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([userId])
+  @@index([companyId])
+  @@index([workId])
+  @@index([date])
+  @@index([type])
+}
+
+model WorkerSchedule {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  companyId       String
+  
+  // Horario semanal (JSON)
+  weeklySchedule  String          // JSON con horarios por día
+  
+  // Jornada
+  workHoursPerDay Float           @default(8)
+  workDaysPerWeek Int             @default(5)
+  
+  // Festivos y vacaciones
+  vacationDays    Int             @default(22)
+  usedVacationDays Int            @default(0)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+}
+
+model WorkerLocation {
+  id              String          @id @default(cuid())
+  userId          String
+  workId          String?
+  
+  // Ubicación
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  
+  // Timestamp
+  recordedAt      DateTime        @default(now())
+  
+  @@index([userId])
+  @@index([workId])
+  @@index([recordedAt])
+}
+
+// ==========================================
+// PROYECTOS ARQUITECTÓNICOS
+// ==========================================
+
+enum ProjectStatus {
+  DRAFT          // Borrador
+  IN_DESIGN      // En diseño
+  FOR_REVIEW     // Pendiente de revisión
+  APPROVED       // Aprobado
+  IN_CONSTRUCTION // En construcción
+  COMPLETED      // Completado
+  ARCHIVED       // Archivado
+}
+
+enum PlanType {
+  FLOOR_PLAN     // Plano de planta
+  ELEVATION      // Alzado
+  SECTION        // Sección
+  ELECTRICAL     // Instalación eléctrica
+  PLUMBING       // Fontanería
+  STRUCTURE      // Estructura
+  LANDSCAPE      // Jardinería
+  THREED_MODEL       // Modelo 3D
+  RENDER         // Render
+  OTHER          // Otro
+}
+
+model ArchitectProject {
+  id              String          @id @default(cuid())
+  companyId       String
+  createdById     String          // Arquitecto creador
+  workId          String?         // Obra asociada (si ya existe)
+  leadId          String?         // Lead asociado
+  
+  // Datos del proyecto
+  name            String
+  description     String?
+  reference       String?         // Referencia interna
+  location        String?
+  
+  // Estado
+  status          ProjectStatus   @default(DRAFT)
+  
+  // Datos del cliente
+  clientName      String?
+  clientPhone     String?
+  clientEmail     String?
+  
+  // Especificaciones
+  totalArea       Float?          // m² totales
+  floors          Int?            // Número de plantas
+  bedrooms        Int?
+  bathrooms       Int?
+  
+  // Fechas
+  startDate       DateTime?
+  estimatedEndDate DateTime?
+  completedAt     DateTime?
+  
+  // Visibilidad para cliente
+  visibleToClient Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  plans           ProjectPlan[]
+  comments        ProjectComment[]
+  approvals       ProjectApproval[]
+  
+  @@index([companyId])
+  @@index([createdById])
+  @@index([status])
+  @@index([workId])
+}
+
+model ProjectPlan {
+  id              String          @id @default(cuid())
+  projectId       String
+  uploadedById    String          // Arquitecto que sube
+  
+  // Datos del plano
+  name            String
+  description     String?
+  type            PlanType        @default(FLOOR_PLAN)
+  floor           Int?            // Planta (0=baja, 1=primera, etc.)
+  scale           String?         // Escala (1:100, etc.)
+  
+  // Archivo
+  fileName        String
+  filePath        String          // URL del archivo
+  fileSize        Int?
+  mimeType        String?
+  
+  // Versionado
+  version         Int             @default(1)
+  parentPlanId    String?         // Para versiones anteriores
+  
+  // Dimensiones del plano
+  width           Float?          // Ancho en metros
+  height          Float?          // Alto en metros
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Visibilidad
+  visibleToClient Boolean         @default(false)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([type])
+  @@index([uploadedById])
+}
+
+model ProjectComment {
+  id              String          @id @default(cuid())
+  projectId       String
+  userId          String
+  planId          String?         // Comentario en un plano específico
+  
+  // Contenido
+  content         String
+  
+  // Posición en el plano (si aplica)
+  positionX       Float?
+  positionY       Float?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([userId])
+  @@index([planId])
+}
+
+model ProjectApproval {
+  id              String          @id @default(cuid())
+  projectId       String
+  approvedById    String          // Usuario que aprueba
+  
+  // Datos
+  status          String          @default("pending") // pending, approved, rejected
+  comments        String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  decidedAt       DateTime?
+  
+  // Relaciones
+  project         ArchitectProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([approvedById])
+}
+
+// ==========================================
+// ASIGNACIONES DIRECTAS A USUARIOS
+// ==========================================
+
+model DirectAssignment {
+  id              String          @id @default(cuid())
+  companyId       String
+  assignedToId    String          // Usuario que recibe la asignación
+  assignedById    String          // Usuario que asigna
+  
+  // Tipo de entidad asignada
+  entityType      String          // lead, work, task, project, plan
+  entityId        String
+  
+  // Datos
+  priority        Int             @default(3)  // 1=Urgente, 2=Alta, 3=Normal
+  notes           String?
+  
+  // Fechas
+  dueDate         DateTime?
+  completedAt     DateTime?
+  
+  // Estado
+  status          String          @default("pending") // pending, accepted, in_progress, completed, cancelled
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([companyId])
+  @@index([assignedToId])
+  @@index([entityType])
+  @@index([entityId])
+}
+
+// ==========================================
+// CATÁLOGO DE MATERIALES Y ACABADOS
+// ==========================================
+
+enum MaterialTypeEnum {
+  STRUCTURAL     // Estructural
+  FINISHES       // Acabados
+  ELECTRICAL     // Eléctrico
+  PLUMBING       // Fontanería
+  INSULATION     // Aislamiento
+  FLOORING       // Suelos
+  WALLS          // Paredes
+  CEILING        // Techos
+  DOORS          // Puertas
+  WINDOWS        // Ventanas
+  KITCHEN        // Cocina
+  BATHROOM       // Baño
+  OUTDOOR        // Exterior
+  OTHER          // Otro
+}
+
+enum MaterialStatus {
+  ACTIVE         // Activo
+  DISCONTINUED   // Descatalogado
+  OUT_OF_STOCK   // Sin stock
+  LIMITED        // Limitado
+}
+
+model ProductCategory {
+  id              String          @id @default(cuid())
+  companyId       String
+  parentId        String?         // Para categorías anidadas
+  
+  // Datos
+  name            String
+  description     String?
+  icon            String?         // Emoji o nombre de icono
+  color           String?         // Color para UI
+  
+  // Orden
+  order           Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  materials       MaterialProduct[]
+  children        ProductCategory[]  @relation("CategoryHierarchy")
+  parent          ProductCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  
+  @@index([companyId])
+  @@index([parentId])
+}
+
+model MaterialProduct {
+  id              String          @id @default(cuid())
+  companyId       String
+  categoryId      String?
+  
+  // Identificación
+  sku             String?         // Código interno
+  reference       String?         // Referencia proveedor
+  barcode         String?         // Código de barras
+  
+  // Datos básicos
+  name            String
+  description     String?
+  brand           String?         // Marca
+  model           String?         // Modelo
+  
+  // Categorización
+  materialType    MaterialTypeEnum @default(FINISHES)
+  tags            String?         // JSON con tags
+  
+  // Especificaciones
+  unit            String          @default("unidad") // unidad, m, m2, m3, kg, litro, pack
+  unitQuantity    Float?          // Cantidad por unidad (ej: 2.5m por pieza)
+  minOrder        Float?          // Pedido mínimo
+  increment       Float?          // Incremento de pedido
+  
+  // Dimensiones
+  length          Float?          // Largo en metros
+  width           Float?          // Ancho en metros  
+  height          Float?          // Alto en metros
+  weight          Float?          // Peso en kg
+  
+  // Precios
+  costPrice       Float?          // Precio de coste
+  retailPrice     Float?          // PVP
+  contractorPrice Float?          // Precio subcontratas
+  priceUnit       String          @default("unidad")
+  
+  // IVA
+  taxRate         Float           @default(21)
+  
+  // Stock
+  stockQuantity   Float           @default(0)
+  minStock        Float?          // Stock mínimo
+  maxStock        Float?          // Stock máximo
+  
+  // Estado
+  status          MaterialStatus  @default(ACTIVE)
+  isActive        Boolean         @default(true)
+  isFeatured      Boolean         @default(false)
+  
+  // Imágenes
+  imageUrl        String?
+  images          String?         // JSON con array de URLs
+  
+  // Ficha técnica
+  datasheetUrl    String?         // URL PDF ficha técnica
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  leadTime        Int?            // Días de entrega
+  
+  // Notas internas
+  internalNotes   String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  categoryRelation ProductCategory? @relation(fields: [categoryId], references: [id])
+  orderItems      MaterialOrderItem[]
+  priceHistory    MaterialPriceHistory[]
+  
+  @@index([companyId])
+  @@index([materialType])
+  @@index([sku])
+  @@index([status])
+}
+
+model MaterialPriceHistory {
+  id              String          @id @default(cuid())
+  productId       String
+  
+  // Datos
+  costPrice       Float?
+  retailPrice     Float?
+  contractorPrice Float?
+  
+  // Motivo del cambio
+  reason          String?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  product         MaterialProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// CATÁLOGO DE MERCHANDISING
+// ==========================================
+
+enum MerchCategory {
+  BRANDED         // Marca
+  PROMOTIONAL     // Promocional
+  GIFT            // Regalo
+  UNIFORM         // Uniforme
+  SIGNAGE         // Señalética
+  PRINTED         // Impreso
+  DIGITAL         // Digital
+  OTHER           // Otro
+}
+
+model MerchProduct {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Identificación
+  sku             String?
+  reference       String?
+  
+  // Datos básicos
+  name            String
+  description     String?
+  
+  // Categorización
+  category        MerchCategory   @default(BRANDED)
+  
+  // Especificaciones
+  unit            String          @default("unidad")
+  minOrder        Int?
+  
+  // Precios - Para inmobiliarias y colaboradores
+  costPrice       Float?
+  wholesalePrice  Float?          // Precio mayorista
+  retailPrice     Float?
+  
+  // IVA
+  taxRate         Float           @default(21)
+  
+  // Stock
+  stockQuantity   Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Visibilidad
+  visibleToRealEstate Boolean    @default(true)
+  visibleToPartners    Boolean    @default(true)
+  visibleToFranchises  Boolean    @default(true)
+  
+  // Imágenes
+  imageUrl        String?
+  images          String?
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  
+  // Personalización
+  customizable    Boolean         @default(false)
+  customizationOptions String?    // JSON con opciones (talla, color, logo, etc.)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  orderItems      MerchOrderItem[]
+  
+  @@index([companyId])
+  @@index([category])
+  @@index([isActive])
+}
+
+// ==========================================
+// PEDIDOS DE MATERIALES
+// ==========================================
+
+enum MaterialOrderStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente aprobación
+  APPROVED        // Aprobado
+  ORDERED         // Pedido al proveedor
+  PARTIAL         // Entrega parcial
+  DELIVERED       // Entregado
+  CANCELLED       // Cancelado
+}
+
+enum MaterialOrderType {
+  INTERNAL        // Uso interno
+  SUBCONTRACTOR   // Para subcontrata
+  PROJECT         // Para obra específica
+  STOCK           // Reposición stock
+}
+
+model MaterialOrder {
+  id              String              @id @default(cuid())
+  companyId       String
+  orderNumber     String              // Número de pedido
+  
+  // Tipo
+  type            MaterialOrderType   @default(INTERNAL)
+  
+  // Solicitante
+  requestedById   String              // Usuario que solicita
+  subcontractorId String?             // Si es pedido de subcontrata
+  workId          String?             // Obra asociada
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  supplierContact String?
+  supplierPhone   String?
+  supplierEmail   String?
+  
+  // Dirección de entrega
+  deliveryAddress String?
+  deliveryCity    String?
+  deliveryPostalCode String?
+  deliveryNotes   String?
+  
+  // Fechas
+  orderDate       DateTime            @default(now())
+  expectedDate    DateTime?
+  deliveryDate    DateTime?
+  
+  // Estado
+  status          MaterialOrderStatus @default(DRAFT)
+  
+  // Importes
+  subtotal        Float               @default(0)
+  tax             Float               @default(0)
+  total           Float               @default(0)
+  discount        Float               @default(0)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  approvalNotes   String?
+  
+  // Notas
+  notes           String?
+  internalNotes   String?
+  
+  // Documentos
+  purchaseOrderUrl String?            // PDF pedido compra
+  deliveryNoteUrl  String?            // Albarán
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work?           @relation(fields: [workId], references: [id])
+  items           MaterialOrderItem[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([workId])
+}
+
+model MaterialOrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  productId       String?
+  
+  // Datos del producto (desnormalizado)
+  productName     String
+  productSku      String?
+  productUnit     String
+  
+  // Cantidad y precio
+  quantity        Float
+  unitPrice       Float
+  taxRate         Float           @default(21)
+  discount        Float           @default(0)
+  total           Float
+  
+  // Entrega
+  deliveredQty    Float           @default(0)
+  pendingQty      Float?          // Calculado: quantity - deliveredQty
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  order           MaterialOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         MaterialProduct? @relation(fields: [productId], references: [id])
+  
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ==========================================
+// PEDIDOS DE MERCHANDISING
+// ==========================================
+
+enum MerchOrderStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente
+  PROCESSING      // En proceso
+  SHIPPED         // Enviado
+  DELIVERED       // Entregado
+  CANCELLED       // Cancelado
+}
+
+model MerchOrder {
+  id              String            @id @default(cuid())
+  companyId       String
+  orderNumber     String
+  
+  // Cliente (inmobiliaria, colaborador, franquicia)
+  clientId        String?           // User ID del cliente
+  clientType      String?           // REAL_ESTATE, FRANCHISE, PARTNER
+  clientName      String
+  clientEmail     String?
+  clientPhone     String?
+  clientCompany   String?
+  
+  // Dirección de envío
+  shippingAddress String?
+  shippingCity    String?
+  shippingPostalCode String?
+  shippingProvince String?
+  
+  // Fechas
+  orderDate       DateTime          @default(now())
+  shipDate        DateTime?
+  deliveryDate    DateTime?
+  
+  // Estado
+  status          MerchOrderStatus  @default(DRAFT)
+  
+  // Importes
+  subtotal        Float             @default(0)
+  tax             Float             @default(0)
+  shipping        Float             @default(0)
+  total           Float             @default(0)
+  
+  // Seguimiento
+  trackingNumber  String?
+  carrier         String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  items           MerchOrderItem[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([clientId])
+}
+
+model MerchOrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  productId       String?
+  
+  // Datos del producto
+  productName     String
+  productSku      String?
+  
+  // Cantidad y precio
+  quantity        Int
+  unitPrice       Float
+  taxRate         Float           @default(21)
+  total           Float
+  
+  // Personalización
+  customization   String?         // JSON con opciones elegidas
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  order           MerchOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         MerchProduct?   @relation(fields: [productId], references: [id])
+  
+  @@index([orderId])
+}
+
+// ==========================================
+// CERTIFICACIONES
+// ==========================================
+
+enum CertificationStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente revisión
+  APPROVED        // Aprobado
+  PARTIAL         // Certificación parcial
+  FINAL           // Certificación final
+  INVOICED        // Facturado
+  PAID            // Pagado
+}
+
+model Certification {
+  id              String              @id @default(cuid())
+  companyId       String
+  workId          String
+  clientId        String?             // Usuario cliente
+  
+  // Datos
+  number          String              // Número de certificación
+  type            String              @default("partial") // partial, final, monthly
+  period          String?             // Período (ej: "2024-01")
+  
+  // Fechas
+  certDate        DateTime            @default(now())
+  fromDate        DateTime?
+  toDate          DateTime?
+  
+  // Estado
+  status          CertificationStatus @default(DRAFT)
+  
+  // Importes
+  previousCertified Float             @default(0)  // Lo certificado anteriormente
+  currentCertified  Float             @default(0)  // Lo certificado ahora
+  totalCertified    Float             @default(0)  // Acumulado
+  retentionPct      Float             @default(0)  // % de retención
+  retentionAmount   Float             @default(0)  // Importe retenido
+  subtotal          Float             @default(0)
+  tax               Float             @default(0)
+  total             Float             @default(0)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Factura
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  invoiceUrl      String?
+  
+  // Pago
+  paidAt          DateTime?
+  paymentMethod   String?
+  
+  // Notas
+  notes           String?
+  
+  // PDF
+  pdfUrl          String?
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work            @relation(fields: [workId], references: [id])
+  items           CertificationItem[]
+  
+  @@index([companyId])
+  @@index([workId])
+  @@index([status])
+}
+
+model CertificationItem {
+  id              String          @id @default(cuid())
+  certificationId String
+  
+  // Datos de la partida
+  concept        String
+  description    String?
+  unit           String
+  budgetQty      Float           // Cantidad presupuestada
+  previousQty    Float           // Certificado anteriormente
+  currentQty     Float           // Certificado ahora
+  unitPrice      Float
+  budgetAmount   Float           // Importe presupuestado
+  previousAmount Float           // Importe anterior
+  currentAmount  Float           // Importe actual
+  
+  // Timestamps
+  createdAt      DateTime        @default(now())
+  
+  // Relaciones
+  certification  Certification   @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  
+  @@index([certificationId])
+}
+
+// ==========================================
+// CONTROL DE PRESUPUESTOS SUBCONTRATAS
+// ==========================================
+
+enum SubcontractorBudgetStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente aprobación
+  ACCEPTED        // Aceptado
+  REJECTED        // Rechazado
+  IN_PROGRESS     // En ejecución
+  COMPLETED       // Completado
+  CANCELLED       // Cancelado
+}
+
+model SubcontractorBudget {
+  id              String                  @id @default(cuid())
+  companyId       String
+  workId          String
+  subcontractorId String
+  
+  // Datos
+  number          String?
+  title           String
+  description     String?
+  
+  // Fechas
+  budgetDate      DateTime                @default(now())
+  validUntil      DateTime?
+  startDate       DateTime?
+  endDate         DateTime?
+  
+  // Estado
+  status          SubcontractorBudgetStatus @default(DRAFT)
+  
+  // Importes
+  subtotal        Float                   @default(0)
+  tax             Float                   @default(0)
+  total           Float                   @default(0)
+  
+  // Control de márgenes
+  clientBudget    Float?                  // Presupuesto al cliente
+  margin          Float?                  // Margen calculado
+  marginPct       Float?                  // % de margen
+  
+  // Anteriores (para comparar cambios)
+  previousBudgetId String?
+  previousTotal   Float?
+  difference      Float?                  // Diferencia con anterior
+  
+  // Aprobación
+  acceptedAt      DateTime?
+  acceptedById    String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work            @relation(fields: [workId], references: [id])
+  items           SubcontractorBudgetItem[]
+  certifications  SubcontractorCertification[]
+  comparisons     BudgetComparison[]
+  
+  @@index([companyId])
+  @@index([workId])
+  @@index([subcontractorId])
+  @@index([status])
+}
+
+model SubcontractorBudgetItem {
+  id              String                  @id @default(cuid())
+  budgetId        String
+  
+  // Datos
+  concept        String
+  description    String?
+  unit           String
+  quantity       Float
+  unitPrice      Float
+  total          Float
+  
+  // Control
+  certifiedQty   Float                   @default(0)
+  pendingQty     Float
+  certifiedAmount Float                  @default(0)
+  
+  // Timestamps
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  
+  // Relaciones
+  budget         SubcontractorBudget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  
+  @@index([budgetId])
+}
+
+model SubcontractorCertification {
+  id              String          @id @default(cuid())
+  budgetId        String
+  
+  // Datos
+  number          String
+  certDate        DateTime        @default(now())
+  period          String?
+  
+  // Importes
+  previousAmount  Float           @default(0)
+  currentAmount   Float           @default(0)
+  totalAmount     Float           @default(0)
+  
+  // Estado
+  status          String          @default("pending") // pending, approved, paid
+  
+  // Pago
+  paidAt          DateTime?
+  paymentMethod   String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  budget          SubcontractorBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  
+  @@index([budgetId])
+  @@index([status])
+}
+
+// ==========================================
+// ANÁLISIS Y COMPARACIÓN DE PRESUPUESTOS
+// ==========================================
+
+model BudgetComparison {
+  id              String          @id @default(cuid())
+  workId          String
+  newBudgetId     String
+  oldBudgetId     String?
+  
+  // Datos del cambio
+  changedById     String          // Usuario que hizo el cambio
+  subcontractorBefore String?     // Subcontrata anterior
+  subcontractorAfter String?      // Subcontrata nueva
+  
+  // Importes
+  amountBefore    Float
+  amountAfter     Float
+  difference      Float
+  differencePct   Float
+  
+  // Margen
+  marginBefore    Float?
+  marginAfter     Float?
+  marginImprovement Float?
+  
+  // Profit Share calculado
+  profitShareAmount Float?
+  profitSharePct  Float?
+  
+  // Análisis IA
+  aiAnalysis      String?         // Análisis de la IA
+  aiRecommendations String?       // Recomendaciones
+  
+  // Fecha
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  work            Work            @relation(fields: [workId], references: [id])
+  newBudget       SubcontractorBudget @relation(fields: [newBudgetId], references: [id])
+  
+  @@index([workId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
+// ==========================================
+// PROFIT SHARE - REPARTO DE BENEFICIOS
+// ==========================================
+
+enum ProfitShareStatus {
+  CALCULATED      // Calculado
+  PENDING         // Pendiente aprobación
+  APPROVED        // Aprobado
+  PAID            // Pagado
+  CANCELLED       // Cancelado
+}
+
+model ProfitShare {
+  id              String              @id @default(cuid())
+  companyId       String
+  workId          String?
+  budgetComparisonId String?
+  
+  // Beneficiario
+  userId          String              // Empleado que obtiene el profit
+  userName        String
+  
+  // Origen del beneficio
+  source          String              // budget_optimization, negotiation, supplier_change
+  description     String
+  
+  // Cálculo
+  savingAmount    Float               // Ahorro total conseguido
+  sharePct        Float               // % que le corresponde
+  shareAmount     Float               // Cantidad a recibir
+  
+  // Estado
+  status          ProfitShareStatus   @default(CALCULATED)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Pago
+  paidAt          DateTime?
+  paymentRef      String?             // Referencia del pago
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work?           @relation(fields: [workId], references: [id])
+  
+  @@index([companyId])
+  @@index([userId])
+  @@index([workId])
+  @@index([status])
+}
+
+// ==========================================
+// IMPORTACIÓN DE CATÁLOGOS (PDF)
+// ==========================================
+
+model CatalogImport {
+  id              String          @id @default(cuid())
+  companyId       String
+  uploadedById    String
+  
+  // Tipo
+  type            String          // materials, merch
+  
+  // Archivo
+  fileName        String
+  filePath        String
+  fileSize        Int?
+  
+  // Estado
+  status          ImportStatus    @default(PENDING)
+  processedRows   Int             @default(0)
+  totalRows       Int?
+  errorRows       Int             @default(0)
+  
+  // Resultado
+  productsCreated Int             @default(0)
+  productsUpdated Int             @default(0)
+  errors          String?         // JSON con errores
+  
+  // Configuración de importación
+  config          String?         // JSON con mapeo de columnas
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  drafts          ImportedProductDraft[]
+  
+  @@index([companyId])
+  @@index([status])
+}
+
+model ImportedProductDraft {
+  id              String          @id @default(cuid())
+  importId        String
+  
+  // Datos crudos del PDF
+  rawData         String          // JSON con datos extraídos
+  
+  // Datos procesados
+  name            String?
+  sku             String?
+  description     String?
+  unit            String?
+  category        String?
+  
+  // Precio (pendiente de asignar)
+  price           Float?
+  hasPrice        Boolean         @default(false)
+  
+  // Estado
+  isProcessed     Boolean         @default(false)
+  isApproved      Boolean         @default(false)
+  productId       String?         // ID del producto creado
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  processedAt     DateTime?
+  
+  // Relaciones
+  import          CatalogImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  
+  @@index([importId])
+  @@index([isProcessed])
+}
+
+// ==========================================
+// CERTIFICACIONES DE EMPLEADOS
+// ==========================================
+
+enum EmployeeCertificationStatus {
+  DRAFT          // Borrador
+  SUBMITTED      // Enviado por empleado
+  APPROVED       // Aprobado
+  PAID           // Pagado
+  REJECTED       // Rechazado
+}
+
+model EmployeeCertification {
+  id              String                      @id @default(cuid())
+  companyId       String
+  userId          String                      // Empleado
+  workId          String?                     // Obra relacionada
+  
+  // Período
+  month           Int                         // 1-12
+  year            Int
+  
+  // Datos del empleado
+  amount          Float                       // Cantidad certificada por el empleado
+  workDescription String?                     // Descripción del trabajo realizado
+  hoursWorked     Float?                      // Horas trabajadas
+  
+  // Validación admin
+  adminAmount     Float?                      // Cantidad validada por admin
+  adminNotes      String?
+  validatedById   String?
+  validatedAt     DateTime?
+  
+  // Cálculo de profit
+  profitAmount    Float?                      // Profit calculado
+  profitPct       Float?                      // Porcentaje de profit
+  
+  // Estado
+  status          EmployeeCertificationStatus @default(DRAFT)
+  
+  // Pago
+  paidAt          DateTime?
+  paymentRef      String?
+  
+  // Timestamps
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  
+  // Relaciones
+  company         Company                     @relation(fields: [companyId], references: [id])
+  user            User                        @relation(fields: [userId], references: [id])
+  items           EmployeeCertificationItem[]
+  
+  @@unique([userId, month, year])              // Una certificación por mes/año/empleado
+  @@index([companyId])
+  @@index([userId])
+  @@index([workId])
+  @@index([status])
+  @@index([year, month])
+}
+
+model EmployeeCertificationItem {
+  id                  String    @id @default(cuid())
+  certificationId     String
+  
+  // Datos
+  workId              String?   // Obra específica
+  workName            String?   // Nombre de la obra
+  description         String    // Descripción del trabajo
+  hours               Float     // Horas dedicadas
+  amount              Float     // Cantidad
+  
+  // Validación
+  validatedAmount     Float?    // Cantidad validada
+  notes               String?
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relaciones
+  certification       EmployeeCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  
+  @@index([certificationId])
+  @@index([workId])
+}
+
+// ==========================================
+// CONTRATOS
+// ==========================================
+
+enum ContractType {
+  CLIENT         // Contrato con cliente
+  SUBCONTRACTOR  // Contrato con subcontrata
+  REAL_ESTATE    // Contrato con inmobiliaria
+  PARTNER        // Contrato con colaborador
+  EMPLOYEE       // Contrato laboral
+  SUPPLIER       // Contrato con proveedor
+}
+
+enum MainContractStatus {
+  DRAFT          // Borrador
+  PENDING_SIGN   // Pendiente de firma
+  ACTIVE         // Activo
+  COMPLETED      // Completado
+  CANCELLED      // Cancelado
+  EXPIRED        // Expirado
+}
+
+model Contract {
+  id              String              @id @default(cuid())
+  companyId       String
+  
+  // Tipo
+  type            ContractType
+  number          String          // Número de contrato
+  
+  // Partes
+  partyType       String          // client, subcontractor, real_estate, partner
+  partyId         String?         // ID del usuario/empresa
+  partyName       String          // Nombre de la otra parte
+  partyTaxId      String?         // CIF/NIF
+  partyAddress    String?
+  partyPhone      String?
+  partyEmail      String?
+  
+  // Relación con obra/lead
+  workId          String?
+  leadId          String?
+  
+  // Datos del contrato
+  title           String
+  description     String?
+  startDate       DateTime
+  endDate         DateTime?
+  
+  // Importes
+  totalAmount     Float?
+  currency        String          @default("EUR")
+  paymentTerms    String?         // JSON con condiciones de pago
+  
+  // Cláusulas (JSON)
+  clauses         String?
+  
+  // Archivos
+  documentUrl     String?         // PDF del contrato
+  signedDocumentUrl String?       // PDF firmado
+  
+  // Firmas
+  signedByParty   Boolean         @default(false)
+  signedByPartyAt DateTime?
+  signedByCompany Boolean         @default(false)
+  signedByCompanyAt DateTime?
+  signedByCompanyId String?
+  
+  // Estado
+  status          MainContractStatus  @default(DRAFT)
+  
+  // Renovación
+  autoRenew       Boolean         @default(false)
+  renewalPeriod   Int?            // Meses de renovación
+  
+  // Notas
+  notes           String?
+  internalNotes   String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  signedByUser    User?           @relation("ContractsSignedByUser", fields: [signedByCompanyId], references: [id])
+  
+  @@index([companyId])
+  @@index([type])
+  @@index([status])
+  @@index([partyId])
+  @@index([workId])
+}
+
+// ==========================================
+// GESTIÓN DOCUMENTAL AVANZADA
+// ==========================================
+
+enum DocumentCategory {
+  FLYER          // Flyer promocional
+  LOGO           // Logo
+  CATALOG        // Catálogo
+  MANUAL         // Manual
+  TEMPLATE       // Plantilla
+  PRESENTATION   // Presentación
+  BUDGET_TEMPLATE // Plantilla de presupuesto
+  CONTRACT_TEMPLATE // Plantilla de contrato
+  CERTIFICATE    // Certificado
+  INVOICE        // Factura
+  RECEIPT        // Recibo
+  OTHER          // Otro
+}
+
+model DocumentLibrary {
+  id              String            @id @default(cuid())
+  companyId       String
+  uploadedById    String
+  
+  // Clasificación
+  category        DocumentCategory  @default(OTHER)
+  name            String
+  description     String?
+  tags            String?           // JSON con tags
+  
+  // Archivo
+  fileName        String
+  filePath        String
+  fileSize        Int?
+  mimeType        String?
+  
+  // Versión
+  version         Int               @default(1)
+  parentDocumentId String?          // Para versiones anteriores
+  
+  // Visibilidad
+  isPublic        Boolean           @default(false)
+  visibleToRoles  String?           // JSON con roles que pueden verlo
+  
+  // Descargas
+  downloadCount   Int               @default(0)
+  
+  // Metadatos adicionales
+  metadata        String?           // JSON con metadatos
+  
+  // Estado
+  isActive        Boolean           @default(true)
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relaciones
+  company         Company           @relation(fields: [companyId], references: [id])
+  uploadedBy      User              @relation(fields: [uploadedById], references: [id])
+  
+  @@index([companyId])
+  @@index([category])
+  @@index([uploadedById])
+}
+
+// ==========================================
+// ENLACES EXTERNOS (CALCULADORAS)
+// ==========================================
+
+model ExternalLink {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Datos
+  name            String
+  description     String?
+  url             String
+  category        String          // calculator, tool, resource, etc.
+  
+  // Visibilidad
+  visibleToRoles  String?         // JSON con roles
+  isPublic        Boolean         @default(false)
+  
+  // Orden
+  order           Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([category])
+}
+
+// ==========================================
+// ANÁLISIS DE DOCUMENTOS CON IA
+// ==========================================
+
+model DocumentAnalysis {
+  id              String          @id @default(cuid())
+  companyId       String
+  userId          String
+  documentId      String?         // Documento analizado (opcional)
+  
+  // Tipo de análisis
+  analysisType    String          // budget, contract, product_list, etc.
+  
+  // Archivo
+  fileName        String
+  filePath        String?
+  
+  // Resultados
+  extractedData   String?         // JSON con datos extraídos
+  aiSummary       String?         // Resumen del AI
+  aiRecommendations String?       // Recomendaciones
+  
+  // Estado
+  status          String          @default("pending") // pending, processing, completed, failed
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
+  
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
