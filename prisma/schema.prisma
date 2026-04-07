@@ -172,6 +172,18 @@ model User {
   sessions         Session[]
   accounts         Account[]
   
+  // Certificaciones de empleado
+  employeeCertifications EmployeeCertification[]
+  
+  // Análisis de documentos
+  documentAnalyses DocumentAnalysis[]
+  
+  // Biblioteca de documentos
+  libraryDocuments DocumentLibrary[]
+  
+  // Contratos firmados
+  signedContracts Contract[] @relation("ContractsSignedByUser")
+  
   @@index([email])
   @@index([role])
   @@index([companyId])
@@ -253,6 +265,13 @@ model Company {
   subcontractorBudgets  SubcontractorBudget[]
   profitShares          ProfitShare[]
   catalogImports        CatalogImport[]
+  
+  // Nuevos módulos
+  employeeCertifications EmployeeCertification[]
+  contracts              Contract[]
+  documentLibrary        DocumentLibrary[]
+  documentAnalyses       DocumentAnalysis[]
+  externalLinks          ExternalLink[]
   
   @@index([type])
 }
@@ -3645,4 +3664,324 @@ model ImportedProductDraft {
   
   @@index([importId])
   @@index([isProcessed])
+}
+
+// ==========================================
+// CERTIFICACIONES DE EMPLEADOS
+// ==========================================
+
+enum EmployeeCertificationStatus {
+  DRAFT          // Borrador
+  SUBMITTED      // Enviado por empleado
+  APPROVED       // Aprobado
+  PAID           // Pagado
+  REJECTED       // Rechazado
+}
+
+model EmployeeCertification {
+  id              String                      @id @default(cuid())
+  companyId       String
+  userId          String                      // Empleado
+  workId          String?                     // Obra relacionada
+  
+  // Período
+  month           Int                         // 1-12
+  year            Int
+  
+  // Datos del empleado
+  amount          Float                       // Cantidad certificada por el empleado
+  workDescription String?                     // Descripción del trabajo realizado
+  hoursWorked     Float?                      // Horas trabajadas
+  
+  // Validación admin
+  adminAmount     Float?                      // Cantidad validada por admin
+  adminNotes      String?
+  validatedById   String?
+  validatedAt     DateTime?
+  
+  // Cálculo de profit
+  profitAmount    Float?                      // Profit calculado
+  profitPct       Float?                      // Porcentaje de profit
+  
+  // Estado
+  status          EmployeeCertificationStatus @default(DRAFT)
+  
+  // Pago
+  paidAt          DateTime?
+  paymentRef      String?
+  
+  // Timestamps
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  
+  // Relaciones
+  company         Company                     @relation(fields: [companyId], references: [id])
+  user            User                        @relation(fields: [userId], references: [id])
+  items           EmployeeCertificationItem[]
+  
+  @@unique([userId, month, year])              // Una certificación por mes/año/empleado
+  @@index([companyId])
+  @@index([userId])
+  @@index([workId])
+  @@index([status])
+  @@index([year, month])
+}
+
+model EmployeeCertificationItem {
+  id                  String    @id @default(cuid())
+  certificationId     String
+  
+  // Datos
+  workId              String?   // Obra específica
+  workName            String?   // Nombre de la obra
+  description         String    // Descripción del trabajo
+  hours               Float     // Horas dedicadas
+  amount              Float     // Cantidad
+  
+  // Validación
+  validatedAmount     Float?    // Cantidad validada
+  notes               String?
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relaciones
+  certification       EmployeeCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  
+  @@index([certificationId])
+  @@index([workId])
+}
+
+// ==========================================
+// CONTRATOS
+// ==========================================
+
+enum ContractType {
+  CLIENT         // Contrato con cliente
+  SUBCONTRACTOR  // Contrato con subcontrata
+  REAL_ESTATE    // Contrato con inmobiliaria
+  PARTNER        // Contrato con colaborador
+  EMPLOYEE       // Contrato laboral
+  SUPPLIER       // Contrato con proveedor
+}
+
+enum MainContractStatus {
+  DRAFT          // Borrador
+  PENDING_SIGN   // Pendiente de firma
+  ACTIVE         // Activo
+  COMPLETED      // Completado
+  CANCELLED      // Cancelado
+  EXPIRED        // Expirado
+}
+
+model Contract {
+  id              String              @id @default(cuid())
+  companyId       String
+  
+  // Tipo
+  type            ContractType
+  number          String          // Número de contrato
+  
+  // Partes
+  partyType       String          // client, subcontractor, real_estate, partner
+  partyId         String?         // ID del usuario/empresa
+  partyName       String          // Nombre de la otra parte
+  partyTaxId      String?         // CIF/NIF
+  partyAddress    String?
+  partyPhone      String?
+  partyEmail      String?
+  
+  // Relación con obra/lead
+  workId          String?
+  leadId          String?
+  
+  // Datos del contrato
+  title           String
+  description     String?
+  startDate       DateTime
+  endDate         DateTime?
+  
+  // Importes
+  totalAmount     Float?
+  currency        String          @default("EUR")
+  paymentTerms    String?         // JSON con condiciones de pago
+  
+  // Cláusulas (JSON)
+  clauses         String?
+  
+  // Archivos
+  documentUrl     String?         // PDF del contrato
+  signedDocumentUrl String?       // PDF firmado
+  
+  // Firmas
+  signedByParty   Boolean         @default(false)
+  signedByPartyAt DateTime?
+  signedByCompany Boolean         @default(false)
+  signedByCompanyAt DateTime?
+  signedByCompanyId String?
+  
+  // Estado
+  status          MainContractStatus  @default(DRAFT)
+  
+  // Renovación
+  autoRenew       Boolean         @default(false)
+  renewalPeriod   Int?            // Meses de renovación
+  
+  // Notas
+  notes           String?
+  internalNotes   String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  signedByUser    User?           @relation("ContractsSignedByUser", fields: [signedByCompanyId], references: [id])
+  
+  @@index([companyId])
+  @@index([type])
+  @@index([status])
+  @@index([partyId])
+  @@index([workId])
+}
+
+// ==========================================
+// GESTIÓN DOCUMENTAL AVANZADA
+// ==========================================
+
+enum DocumentCategory {
+  FLYER          // Flyer promocional
+  LOGO           // Logo
+  CATALOG        // Catálogo
+  MANUAL         // Manual
+  TEMPLATE       // Plantilla
+  PRESENTATION   // Presentación
+  BUDGET_TEMPLATE // Plantilla de presupuesto
+  CONTRACT_TEMPLATE // Plantilla de contrato
+  CERTIFICATE    // Certificado
+  INVOICE        // Factura
+  RECEIPT        // Recibo
+  OTHER          // Otro
+}
+
+model DocumentLibrary {
+  id              String            @id @default(cuid())
+  companyId       String
+  uploadedById    String
+  
+  // Clasificación
+  category        DocumentCategory  @default(OTHER)
+  name            String
+  description     String?
+  tags            String?           // JSON con tags
+  
+  // Archivo
+  fileName        String
+  filePath        String
+  fileSize        Int?
+  mimeType        String?
+  
+  // Versión
+  version         Int               @default(1)
+  parentDocumentId String?          // Para versiones anteriores
+  
+  // Visibilidad
+  isPublic        Boolean           @default(false)
+  visibleToRoles  String?           // JSON con roles que pueden verlo
+  
+  // Descargas
+  downloadCount   Int               @default(0)
+  
+  // Metadatos adicionales
+  metadata        String?           // JSON con metadatos
+  
+  // Estado
+  isActive        Boolean           @default(true)
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relaciones
+  company         Company           @relation(fields: [companyId], references: [id])
+  uploadedBy      User              @relation(fields: [uploadedById], references: [id])
+  
+  @@index([companyId])
+  @@index([category])
+  @@index([uploadedById])
+}
+
+// ==========================================
+// ENLACES EXTERNOS (CALCULADORAS)
+// ==========================================
+
+model ExternalLink {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Datos
+  name            String
+  description     String?
+  url             String
+  category        String          // calculator, tool, resource, etc.
+  
+  // Visibilidad
+  visibleToRoles  String?         // JSON con roles
+  isPublic        Boolean         @default(false)
+  
+  // Orden
+  order           Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([category])
+}
+
+// ==========================================
+// ANÁLISIS DE DOCUMENTOS CON IA
+// ==========================================
+
+model DocumentAnalysis {
+  id              String          @id @default(cuid())
+  companyId       String
+  userId          String
+  documentId      String?         // Documento analizado (opcional)
+  
+  // Tipo de análisis
+  analysisType    String          // budget, contract, product_list, etc.
+  
+  // Archivo
+  fileName        String
+  filePath        String?
+  
+  // Resultados
+  extractedData   String?         // JSON con datos extraídos
+  aiSummary       String?         // Resumen del AI
+  aiRecommendations String?       // Recomendaciones
+  
+  // Estado
+  status          String          @default("pending") // pending, processing, completed, failed
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
+  
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
 }

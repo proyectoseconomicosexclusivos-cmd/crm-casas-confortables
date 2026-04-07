@@ -30,6 +30,12 @@ import {
   FileCheck,
   FileSpreadsheet,
   Coins,
+  FileSearch,
+  FolderOpen,
+  Link2,
+  UserCheck,
+  ScrollText,
+  Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -60,9 +66,17 @@ const navigation = [
   { name: 'Catálogo Merch', href: '/merch', icon: ShoppingBag },
   { name: 'Pedidos Materiales', href: '/material-orders', icon: Package },
   { name: 'Pedidos Merch', href: '/merch-orders', icon: ShoppingBag },
+  // Certificaciones y Presupuestos
   { name: 'Certificaciones', href: '/certifications', icon: FileCheck },
+  { name: 'Certif. Empleados', href: '/employee-certifications', icon: UserCheck },
   { name: 'Pptos. Subcontratas', href: '/subcontractor-budgets', icon: FileSpreadsheet },
   { name: 'Profit Share', href: '/profit-share', icon: Coins },
+  // Contratos y Documentos
+  { name: 'Contratos', href: '/contracts', icon: ScrollText },
+  { name: 'Biblioteca Docs', href: '/document-library', icon: FolderOpen },
+  { name: 'Análisis Docs IA', href: '/document-analysis', icon: FileSearch },
+  // Enlaces y Herramientas
+  { name: 'Enlaces Externos', href: '/external-links', icon: Link2 },
   // Otros módulos
   { name: 'Gamificación', href: '/gamification', icon: Trophy },
   { name: 'Comisiones', href: '/commissions', icon: DollarSign },

@@ -1240,3 +1240,428 @@ export const PROFIT_SHARE_STATUS_LABELS: Record<ProfitShareStatus, string> = {
   PAID: 'Pagado',
   CANCELLED: 'Cancelado',
 };
+
+// ==========================================
+// CERTIFICACIONES DE EMPLEADOS
+// ==========================================
+
+// Estado de certificación de empleado
+export type EmployeeCertificationStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'PAID'
+  | 'REJECTED';
+
+// Certificación de empleado
+export interface EmployeeCertification {
+  id: string;
+  companyId: string;
+  userId: string;
+  workId?: string;
+  month: number;
+  year: number;
+  amount: number;
+  workDescription?: string;
+  hoursWorked?: number;
+  adminAmount?: number;
+  adminNotes?: string;
+  validatedById?: string;
+  validatedAt?: Date;
+  profitAmount?: number;
+  profitPct?: number;
+  status: EmployeeCertificationStatus;
+  paidAt?: Date;
+  paymentRef?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: EmployeeCertificationItem[];
+  user?: User;
+  work?: Work;
+}
+
+// Item de certificación de empleado
+export interface EmployeeCertificationItem {
+  id: string;
+  certificationId: string;
+  workId?: string;
+  workName?: string;
+  description: string;
+  hours: number;
+  amount: number;
+  validatedAmount?: number;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Labels para estados de certificación de empleado
+export const EMPLOYEE_CERTIFICATION_STATUS_LABELS: Record<EmployeeCertificationStatus, string> = {
+  DRAFT: 'Borrador',
+  SUBMITTED: 'Enviado',
+  APPROVED: 'Aprobado',
+  PAID: 'Pagado',
+  REJECTED: 'Rechazado',
+};
+
+// Colores para estados de certificación de empleado
+export const EMPLOYEE_CERTIFICATION_STATUS_COLORS: Record<EmployeeCertificationStatus, string> = {
+  DRAFT: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  SUBMITTED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+  APPROVED: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+  PAID: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400',
+  REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+};
+
+// ==========================================
+// CONTRATOS
+// ==========================================
+
+// Tipo de contrato
+export type ContractType =
+  | 'CLIENT'
+  | 'SUBCONTRACTOR'
+  | 'REAL_ESTATE'
+  | 'PARTNER'
+  | 'EMPLOYEE'
+  | 'SUPPLIER';
+
+// Estado del contrato
+export type MainContractStatus =
+  | 'DRAFT'
+  | 'PENDING_SIGN'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+// Interfaz de contrato
+export interface Contract {
+  id: string;
+  companyId: string;
+  type: ContractType;
+  number: string;
+  
+  // Partes
+  partyType: string;
+  partyId?: string;
+  partyName: string;
+  partyTaxId?: string;
+  partyAddress?: string;
+  partyPhone?: string;
+  partyEmail?: string;
+  
+  // Relación con obra/lead
+  workId?: string;
+  leadId?: string;
+  
+  // Datos del contrato
+  title: string;
+  description?: string;
+  startDate: Date;
+  endDate?: Date;
+  
+  // Importes
+  totalAmount?: number;
+  currency: string;
+  paymentTerms?: string;
+  
+  // Cláusulas
+  clauses?: string;
+  
+  // Archivos
+  documentUrl?: string;
+  signedDocumentUrl?: string;
+  
+  // Firmas
+  signedByParty: boolean;
+  signedByPartyAt?: Date;
+  signedByCompany: boolean;
+  signedByCompanyAt?: Date;
+  signedByCompanyId?: string;
+  
+  // Estado
+  status: MainContractStatus;
+  
+  // Renovación
+  autoRenew: boolean;
+  renewalPeriod?: number;
+  
+  // Notas
+  notes?: string;
+  internalNotes?: string;
+  
+  // Timestamps
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Relaciones
+  company?: Company;
+  work?: Work;
+  lead?: Lead;
+}
+
+// Labels para tipos de contrato
+export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
+  CLIENT: 'Cliente',
+  SUBCONTRACTOR: 'Subcontrata',
+  REAL_ESTATE: 'Inmobiliaria',
+  PARTNER: 'Colaborador',
+  EMPLOYEE: 'Empleado',
+  SUPPLIER: 'Proveedor',
+};
+
+// Labels para estados de contrato
+export const CONTRACT_STATUS_LABELS: Record<MainContractStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING_SIGN: 'Pendiente de Firma',
+  ACTIVE: 'Activo',
+  COMPLETED: 'Completado',
+  CANCELLED: 'Cancelado',
+  EXPIRED: 'Expirado',
+};
+
+// Colores para estados de contrato
+export const CONTRACT_STATUS_COLORS: Record<MainContractStatus, string> = {
+  DRAFT: 'bg-gray-500',
+  PENDING_SIGN: 'bg-yellow-500',
+  ACTIVE: 'bg-green-500',
+  COMPLETED: 'bg-blue-500',
+  CANCELLED: 'bg-red-500',
+  EXPIRED: 'bg-orange-500',
+};
+
+// Colores para tipos de contrato
+export const CONTRACT_TYPE_COLORS: Record<ContractType, string> = {
+  CLIENT: 'bg-emerald-500',
+  SUBCONTRACTOR: 'bg-violet-500',
+  REAL_ESTATE: 'bg-cyan-500',
+  PARTNER: 'bg-amber-500',
+  EMPLOYEE: 'bg-pink-500',
+  SUPPLIER: 'bg-slate-500',
+};
+
+// ==========================================
+// BIBLIOTECA DE DOCUMENTOS
+// ==========================================
+
+// Categoría de documento
+export type DocumentCategory =
+  | 'FLYER'
+  | 'LOGO'
+  | 'CATALOG'
+  | 'MANUAL'
+  | 'TEMPLATE'
+  | 'PRESENTATION'
+  | 'BUDGET_TEMPLATE'
+  | 'CONTRACT_TEMPLATE'
+  | 'CERTIFICATE'
+  | 'INVOICE'
+  | 'RECEIPT'
+  | 'OTHER';
+
+// Documento de biblioteca
+export interface DocumentLibraryItem {
+  id: string;
+  companyId: string;
+  uploadedById: string;
+  category: DocumentCategory;
+  name: string;
+  description?: string;
+  tags?: string;
+  fileName: string;
+  filePath: string;
+  fileSize?: number;
+  mimeType?: string;
+  version: number;
+  parentDocumentId?: string;
+  isPublic: boolean;
+  visibleToRoles?: string;
+  downloadCount: number;
+  metadata?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Relaciones
+  company?: Company;
+  uploadedBy?: User;
+  parentDocument?: DocumentLibraryItem;
+}
+
+// Labels para categorías de documento
+export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  FLYER: 'Flyers Promocionales',
+  LOGO: 'Logos',
+  CATALOG: 'Catálogos',
+  MANUAL: 'Manuales',
+  TEMPLATE: 'Plantillas',
+  PRESENTATION: 'Presentaciones',
+  BUDGET_TEMPLATE: 'Plantillas de Presupuesto',
+  CONTRACT_TEMPLATE: 'Plantillas de Contrato',
+  CERTIFICATE: 'Certificados',
+  INVOICE: 'Facturas',
+  RECEIPT: 'Recibos',
+  OTHER: 'Otros',
+};
+
+// Colores para categorías de documento
+export const DOCUMENT_CATEGORY_COLORS: Record<DocumentCategory, string> = {
+  FLYER: 'bg-pink-500',
+  LOGO: 'bg-purple-500',
+  CATALOG: 'bg-indigo-500',
+  MANUAL: 'bg-blue-500',
+  TEMPLATE: 'bg-cyan-500',
+  PRESENTATION: 'bg-teal-500',
+  BUDGET_TEMPLATE: 'bg-emerald-500',
+  CONTRACT_TEMPLATE: 'bg-green-500',
+  CERTIFICATE: 'bg-amber-500',
+  INVOICE: 'bg-orange-500',
+  RECEIPT: 'bg-red-500',
+  OTHER: 'bg-gray-500',
+};
+
+// Iconos para categorías de documento
+export const DOCUMENT_CATEGORY_ICONS: Record<DocumentCategory, string> = {
+  FLYER: 'FileSpreadsheet',
+  LOGO: 'Image',
+  CATALOG: 'Book',
+  MANUAL: 'BookOpen',
+  TEMPLATE: 'FileText',
+  PRESENTATION: 'Presentation',
+  BUDGET_TEMPLATE: 'Calculator',
+  CONTRACT_TEMPLATE: 'FileCheck',
+  CERTIFICATE: 'Award',
+  INVOICE: 'Receipt',
+  RECEIPT: 'CreditCard',
+  OTHER: 'File',
+};
+
+// ==========================================
+// ANÁLISIS DE DOCUMENTOS CON IA
+// ==========================================
+
+// Tipo de análisis de documento
+export type DocumentAnalysisType =
+  | 'budget'
+  | 'contract'
+  | 'product_list'
+  | 'generic';
+
+// Estado del análisis
+export type DocumentAnalysisStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+// Interfaz de análisis de documento
+export interface DocumentAnalysis {
+  id: string;
+  companyId: string;
+  userId: string;
+  documentId?: string;
+  analysisType: DocumentAnalysisType;
+  fileName: string;
+  filePath?: string;
+  extractedData?: string; // JSON string
+  aiSummary?: string;
+  aiRecommendations?: string;
+  status: DocumentAnalysisStatus;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+// Datos extraídos de presupuesto
+export interface BudgetExtractedData {
+  lineItems: Array<{
+    concept: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  subtotal: number;
+  tax: number;
+  total: number;
+  dates?: {
+    issued?: string;
+    validUntil?: string;
+  };
+  parties?: {
+    issuer?: {
+      name: string;
+      taxId?: string;
+      address?: string;
+    };
+    recipient?: {
+      name: string;
+      taxId?: string;
+      address?: string;
+    };
+  };
+}
+
+// Datos extraídos de contrato
+export interface ContractExtractedData {
+  parties: Array<{
+    role: string;
+    name: string;
+    taxId?: string;
+    address?: string;
+  }>;
+  dates: {
+    startDate?: string;
+    endDate?: string;
+    signedDate?: string;
+  };
+  amounts: {
+    total?: number;
+    currency?: string;
+    paymentTerms?: string;
+  };
+  keyClauses: Array<{
+    title: string;
+    content: string;
+  }>;
+}
+
+// Datos extraídos de lista de productos
+export interface ProductListExtractedData {
+  products: Array<{
+    name: string;
+    reference?: string;
+    sku?: string;
+    description?: string;
+    unit?: string;
+    quantity?: number;
+    price?: number;
+    category?: string;
+  }>;
+  totalProducts: number;
+  currency?: string;
+}
+
+// Labels para tipos de análisis
+export const ANALYSIS_TYPE_LABELS: Record<DocumentAnalysisType, string> = {
+  budget: 'Presupuesto',
+  contract: 'Contrato',
+  product_list: 'Lista de Productos',
+  generic: 'Genérico',
+};
+
+// Labels para estados de análisis
+export const ANALYSIS_STATUS_LABELS: Record<DocumentAnalysisStatus, string> = {
+  pending: 'Pendiente',
+  processing: 'Procesando',
+  completed: 'Completado',
+  failed: 'Fallido',
+};
+
+// Colores para estados de análisis
+export const ANALYSIS_STATUS_COLORS: Record<DocumentAnalysisStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+};
