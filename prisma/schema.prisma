@@ -243,6 +243,17 @@ model Company {
   templates     DocumentTemplate[]
   assignmentRules AssignmentRule[]
   
+  // Catálogos y pedidos
+  productCategories     ProductCategory[]
+  materialProducts      MaterialProduct[]
+  merchProducts         MerchProduct[]
+  materialOrders        MaterialOrder[]
+  merchOrders           MerchOrder[]
+  certifications        Certification[]
+  subcontractorBudgets  SubcontractorBudget[]
+  profitShares          ProfitShare[]
+  catalogImports        CatalogImport[]
+  
   @@index([type])
 }
 
@@ -669,6 +680,13 @@ model Work {
   subcontractorAdvances    SubcontractorAdvance[]
   subcontractorWorkLogs    SubcontractorWorkLog[]
   materialDeliveries       MaterialDelivery[]
+  
+  // Nuevos módulos
+  materialOrders           MaterialOrder[]
+  certifications           Certification[]
+  subcontractorBudgets     SubcontractorBudget[]
+  budgetComparisons        BudgetComparison[]
+  profitShares             ProfitShare[]
   
   @@index([companyId])
   @@index([status])
@@ -1607,6 +1625,7 @@ enum ImportStatus {
   PROCESSING
   COMPLETED
   FAILED
+  ERROR
 }
 
 enum ExportFormat {
@@ -2748,4 +2767,882 @@ model DirectAssignment {
   @@index([assignedToId])
   @@index([entityType])
   @@index([entityId])
+}
+
+// ==========================================
+// CATÁLOGO DE MATERIALES Y ACABADOS
+// ==========================================
+
+enum MaterialTypeEnum {
+  STRUCTURAL     // Estructural
+  FINISHES       // Acabados
+  ELECTRICAL     // Eléctrico
+  PLUMBING       // Fontanería
+  INSULATION     // Aislamiento
+  FLOORING       // Suelos
+  WALLS          // Paredes
+  CEILING        // Techos
+  DOORS          // Puertas
+  WINDOWS        // Ventanas
+  KITCHEN        // Cocina
+  BATHROOM       // Baño
+  OUTDOOR        // Exterior
+  OTHER          // Otro
+}
+
+enum MaterialStatus {
+  ACTIVE         // Activo
+  DISCONTINUED   // Descatalogado
+  OUT_OF_STOCK   // Sin stock
+  LIMITED        // Limitado
+}
+
+model ProductCategory {
+  id              String          @id @default(cuid())
+  companyId       String
+  parentId        String?         // Para categorías anidadas
+  
+  // Datos
+  name            String
+  description     String?
+  icon            String?         // Emoji o nombre de icono
+  color           String?         // Color para UI
+  
+  // Orden
+  order           Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  materials       MaterialProduct[]
+  children        ProductCategory[]  @relation("CategoryHierarchy")
+  parent          ProductCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  
+  @@index([companyId])
+  @@index([parentId])
+}
+
+model MaterialProduct {
+  id              String          @id @default(cuid())
+  companyId       String
+  categoryId      String?
+  
+  // Identificación
+  sku             String?         // Código interno
+  reference       String?         // Referencia proveedor
+  barcode         String?         // Código de barras
+  
+  // Datos básicos
+  name            String
+  description     String?
+  brand           String?         // Marca
+  model           String?         // Modelo
+  
+  // Categorización
+  materialType    MaterialTypeEnum @default(FINISHES)
+  tags            String?         // JSON con tags
+  
+  // Especificaciones
+  unit            String          @default("unidad") // unidad, m, m2, m3, kg, litro, pack
+  unitQuantity    Float?          // Cantidad por unidad (ej: 2.5m por pieza)
+  minOrder        Float?          // Pedido mínimo
+  increment       Float?          // Incremento de pedido
+  
+  // Dimensiones
+  length          Float?          // Largo en metros
+  width           Float?          // Ancho en metros  
+  height          Float?          // Alto en metros
+  weight          Float?          // Peso en kg
+  
+  // Precios
+  costPrice       Float?          // Precio de coste
+  retailPrice     Float?          // PVP
+  contractorPrice Float?          // Precio subcontratas
+  priceUnit       String          @default("unidad")
+  
+  // IVA
+  taxRate         Float           @default(21)
+  
+  // Stock
+  stockQuantity   Float           @default(0)
+  minStock        Float?          // Stock mínimo
+  maxStock        Float?          // Stock máximo
+  
+  // Estado
+  status          MaterialStatus  @default(ACTIVE)
+  isActive        Boolean         @default(true)
+  isFeatured      Boolean         @default(false)
+  
+  // Imágenes
+  imageUrl        String?
+  images          String?         // JSON con array de URLs
+  
+  // Ficha técnica
+  datasheetUrl    String?         // URL PDF ficha técnica
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  leadTime        Int?            // Días de entrega
+  
+  // Notas internas
+  internalNotes   String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  categoryRelation ProductCategory? @relation(fields: [categoryId], references: [id])
+  orderItems      MaterialOrderItem[]
+  priceHistory    MaterialPriceHistory[]
+  
+  @@index([companyId])
+  @@index([materialType])
+  @@index([sku])
+  @@index([status])
+}
+
+model MaterialPriceHistory {
+  id              String          @id @default(cuid())
+  productId       String
+  
+  // Datos
+  costPrice       Float?
+  retailPrice     Float?
+  contractorPrice Float?
+  
+  // Motivo del cambio
+  reason          String?
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  product         MaterialProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// CATÁLOGO DE MERCHANDISING
+// ==========================================
+
+enum MerchCategory {
+  BRANDED         // Marca
+  PROMOTIONAL     // Promocional
+  GIFT            // Regalo
+  UNIFORM         // Uniforme
+  SIGNAGE         // Señalética
+  PRINTED         // Impreso
+  DIGITAL         // Digital
+  OTHER           // Otro
+}
+
+model MerchProduct {
+  id              String          @id @default(cuid())
+  companyId       String
+  
+  // Identificación
+  sku             String?
+  reference       String?
+  
+  // Datos básicos
+  name            String
+  description     String?
+  
+  // Categorización
+  category        MerchCategory   @default(BRANDED)
+  
+  // Especificaciones
+  unit            String          @default("unidad")
+  minOrder        Int?
+  
+  // Precios - Para inmobiliarias y colaboradores
+  costPrice       Float?
+  wholesalePrice  Float?          // Precio mayorista
+  retailPrice     Float?
+  
+  // IVA
+  taxRate         Float           @default(21)
+  
+  // Stock
+  stockQuantity   Int             @default(0)
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Visibilidad
+  visibleToRealEstate Boolean    @default(true)
+  visibleToPartners    Boolean    @default(true)
+  visibleToFranchises  Boolean    @default(true)
+  
+  // Imágenes
+  imageUrl        String?
+  images          String?
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  
+  // Personalización
+  customizable    Boolean         @default(false)
+  customizationOptions String?    // JSON con opciones (talla, color, logo, etc.)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  orderItems      MerchOrderItem[]
+  
+  @@index([companyId])
+  @@index([category])
+  @@index([isActive])
+}
+
+// ==========================================
+// PEDIDOS DE MATERIALES
+// ==========================================
+
+enum MaterialOrderStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente aprobación
+  APPROVED        // Aprobado
+  ORDERED         // Pedido al proveedor
+  PARTIAL         // Entrega parcial
+  DELIVERED       // Entregado
+  CANCELLED       // Cancelado
+}
+
+enum MaterialOrderType {
+  INTERNAL        // Uso interno
+  SUBCONTRACTOR   // Para subcontrata
+  PROJECT         // Para obra específica
+  STOCK           // Reposición stock
+}
+
+model MaterialOrder {
+  id              String              @id @default(cuid())
+  companyId       String
+  orderNumber     String              // Número de pedido
+  
+  // Tipo
+  type            MaterialOrderType   @default(INTERNAL)
+  
+  // Solicitante
+  requestedById   String              // Usuario que solicita
+  subcontractorId String?             // Si es pedido de subcontrata
+  workId          String?             // Obra asociada
+  
+  // Proveedor
+  supplierId      String?
+  supplierName    String?
+  supplierContact String?
+  supplierPhone   String?
+  supplierEmail   String?
+  
+  // Dirección de entrega
+  deliveryAddress String?
+  deliveryCity    String?
+  deliveryPostalCode String?
+  deliveryNotes   String?
+  
+  // Fechas
+  orderDate       DateTime            @default(now())
+  expectedDate    DateTime?
+  deliveryDate    DateTime?
+  
+  // Estado
+  status          MaterialOrderStatus @default(DRAFT)
+  
+  // Importes
+  subtotal        Float               @default(0)
+  tax             Float               @default(0)
+  total           Float               @default(0)
+  discount        Float               @default(0)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  approvalNotes   String?
+  
+  // Notas
+  notes           String?
+  internalNotes   String?
+  
+  // Documentos
+  purchaseOrderUrl String?            // PDF pedido compra
+  deliveryNoteUrl  String?            // Albarán
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work?           @relation(fields: [workId], references: [id])
+  items           MaterialOrderItem[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([workId])
+}
+
+model MaterialOrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  productId       String?
+  
+  // Datos del producto (desnormalizado)
+  productName     String
+  productSku      String?
+  productUnit     String
+  
+  // Cantidad y precio
+  quantity        Float
+  unitPrice       Float
+  taxRate         Float           @default(21)
+  discount        Float           @default(0)
+  total           Float
+  
+  // Entrega
+  deliveredQty    Float           @default(0)
+  pendingQty      Float?          // Calculado: quantity - deliveredQty
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  order           MaterialOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         MaterialProduct? @relation(fields: [productId], references: [id])
+  
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ==========================================
+// PEDIDOS DE MERCHANDISING
+// ==========================================
+
+enum MerchOrderStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente
+  PROCESSING      // En proceso
+  SHIPPED         // Enviado
+  DELIVERED       // Entregado
+  CANCELLED       // Cancelado
+}
+
+model MerchOrder {
+  id              String            @id @default(cuid())
+  companyId       String
+  orderNumber     String
+  
+  // Cliente (inmobiliaria, colaborador, franquicia)
+  clientId        String?           // User ID del cliente
+  clientType      String?           // REAL_ESTATE, FRANCHISE, PARTNER
+  clientName      String
+  clientEmail     String?
+  clientPhone     String?
+  clientCompany   String?
+  
+  // Dirección de envío
+  shippingAddress String?
+  shippingCity    String?
+  shippingPostalCode String?
+  shippingProvince String?
+  
+  // Fechas
+  orderDate       DateTime          @default(now())
+  shipDate        DateTime?
+  deliveryDate    DateTime?
+  
+  // Estado
+  status          MerchOrderStatus  @default(DRAFT)
+  
+  // Importes
+  subtotal        Float             @default(0)
+  tax             Float             @default(0)
+  shipping        Float             @default(0)
+  total           Float             @default(0)
+  
+  // Seguimiento
+  trackingNumber  String?
+  carrier         String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  items           MerchOrderItem[]
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([clientId])
+}
+
+model MerchOrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  productId       String?
+  
+  // Datos del producto
+  productName     String
+  productSku      String?
+  
+  // Cantidad y precio
+  quantity        Int
+  unitPrice       Float
+  taxRate         Float           @default(21)
+  total           Float
+  
+  // Personalización
+  customization   String?         // JSON con opciones elegidas
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  order           MerchOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         MerchProduct?   @relation(fields: [productId], references: [id])
+  
+  @@index([orderId])
+}
+
+// ==========================================
+// CERTIFICACIONES
+// ==========================================
+
+enum CertificationStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente revisión
+  APPROVED        // Aprobado
+  PARTIAL         // Certificación parcial
+  FINAL           // Certificación final
+  INVOICED        // Facturado
+  PAID            // Pagado
+}
+
+model Certification {
+  id              String              @id @default(cuid())
+  companyId       String
+  workId          String
+  clientId        String?             // Usuario cliente
+  
+  // Datos
+  number          String              // Número de certificación
+  type            String              @default("partial") // partial, final, monthly
+  period          String?             // Período (ej: "2024-01")
+  
+  // Fechas
+  certDate        DateTime            @default(now())
+  fromDate        DateTime?
+  toDate          DateTime?
+  
+  // Estado
+  status          CertificationStatus @default(DRAFT)
+  
+  // Importes
+  previousCertified Float             @default(0)  // Lo certificado anteriormente
+  currentCertified  Float             @default(0)  // Lo certificado ahora
+  totalCertified    Float             @default(0)  // Acumulado
+  retentionPct      Float             @default(0)  // % de retención
+  retentionAmount   Float             @default(0)  // Importe retenido
+  subtotal          Float             @default(0)
+  tax               Float             @default(0)
+  total             Float             @default(0)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Factura
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  invoiceUrl      String?
+  
+  // Pago
+  paidAt          DateTime?
+  paymentMethod   String?
+  
+  // Notas
+  notes           String?
+  
+  // PDF
+  pdfUrl          String?
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work            @relation(fields: [workId], references: [id])
+  items           CertificationItem[]
+  
+  @@index([companyId])
+  @@index([workId])
+  @@index([status])
+}
+
+model CertificationItem {
+  id              String          @id @default(cuid())
+  certificationId String
+  
+  // Datos de la partida
+  concept        String
+  description    String?
+  unit           String
+  budgetQty      Float           // Cantidad presupuestada
+  previousQty    Float           // Certificado anteriormente
+  currentQty     Float           // Certificado ahora
+  unitPrice      Float
+  budgetAmount   Float           // Importe presupuestado
+  previousAmount Float           // Importe anterior
+  currentAmount  Float           // Importe actual
+  
+  // Timestamps
+  createdAt      DateTime        @default(now())
+  
+  // Relaciones
+  certification  Certification   @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  
+  @@index([certificationId])
+}
+
+// ==========================================
+// CONTROL DE PRESUPUESTOS SUBCONTRATAS
+// ==========================================
+
+enum SubcontractorBudgetStatus {
+  DRAFT           // Borrador
+  PENDING         // Pendiente aprobación
+  ACCEPTED        // Aceptado
+  REJECTED        // Rechazado
+  IN_PROGRESS     // En ejecución
+  COMPLETED       // Completado
+  CANCELLED       // Cancelado
+}
+
+model SubcontractorBudget {
+  id              String                  @id @default(cuid())
+  companyId       String
+  workId          String
+  subcontractorId String
+  
+  // Datos
+  number          String?
+  title           String
+  description     String?
+  
+  // Fechas
+  budgetDate      DateTime                @default(now())
+  validUntil      DateTime?
+  startDate       DateTime?
+  endDate         DateTime?
+  
+  // Estado
+  status          SubcontractorBudgetStatus @default(DRAFT)
+  
+  // Importes
+  subtotal        Float                   @default(0)
+  tax             Float                   @default(0)
+  total           Float                   @default(0)
+  
+  // Control de márgenes
+  clientBudget    Float?                  // Presupuesto al cliente
+  margin          Float?                  // Margen calculado
+  marginPct       Float?                  // % de margen
+  
+  // Anteriores (para comparar cambios)
+  previousBudgetId String?
+  previousTotal   Float?
+  difference      Float?                  // Diferencia con anterior
+  
+  // Aprobación
+  acceptedAt      DateTime?
+  acceptedById    String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work            @relation(fields: [workId], references: [id])
+  items           SubcontractorBudgetItem[]
+  certifications  SubcontractorCertification[]
+  comparisons     BudgetComparison[]
+  
+  @@index([companyId])
+  @@index([workId])
+  @@index([subcontractorId])
+  @@index([status])
+}
+
+model SubcontractorBudgetItem {
+  id              String                  @id @default(cuid())
+  budgetId        String
+  
+  // Datos
+  concept        String
+  description    String?
+  unit           String
+  quantity       Float
+  unitPrice      Float
+  total          Float
+  
+  // Control
+  certifiedQty   Float                   @default(0)
+  pendingQty     Float
+  certifiedAmount Float                  @default(0)
+  
+  // Timestamps
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  
+  // Relaciones
+  budget         SubcontractorBudget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  
+  @@index([budgetId])
+}
+
+model SubcontractorCertification {
+  id              String          @id @default(cuid())
+  budgetId        String
+  
+  // Datos
+  number          String
+  certDate        DateTime        @default(now())
+  period          String?
+  
+  // Importes
+  previousAmount  Float           @default(0)
+  currentAmount   Float           @default(0)
+  totalAmount     Float           @default(0)
+  
+  // Estado
+  status          String          @default("pending") // pending, approved, paid
+  
+  // Pago
+  paidAt          DateTime?
+  paymentMethod   String?
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  budget          SubcontractorBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  
+  @@index([budgetId])
+  @@index([status])
+}
+
+// ==========================================
+// ANÁLISIS Y COMPARACIÓN DE PRESUPUESTOS
+// ==========================================
+
+model BudgetComparison {
+  id              String          @id @default(cuid())
+  workId          String
+  newBudgetId     String
+  oldBudgetId     String?
+  
+  // Datos del cambio
+  changedById     String          // Usuario que hizo el cambio
+  subcontractorBefore String?     // Subcontrata anterior
+  subcontractorAfter String?      // Subcontrata nueva
+  
+  // Importes
+  amountBefore    Float
+  amountAfter     Float
+  difference      Float
+  differencePct   Float
+  
+  // Margen
+  marginBefore    Float?
+  marginAfter     Float?
+  marginImprovement Float?
+  
+  // Profit Share calculado
+  profitShareAmount Float?
+  profitSharePct  Float?
+  
+  // Análisis IA
+  aiAnalysis      String?         // Análisis de la IA
+  aiRecommendations String?       // Recomendaciones
+  
+  // Fecha
+  createdAt       DateTime        @default(now())
+  
+  // Relaciones
+  work            Work            @relation(fields: [workId], references: [id])
+  newBudget       SubcontractorBudget @relation(fields: [newBudgetId], references: [id])
+  
+  @@index([workId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
+// ==========================================
+// PROFIT SHARE - REPARTO DE BENEFICIOS
+// ==========================================
+
+enum ProfitShareStatus {
+  CALCULATED      // Calculado
+  PENDING         // Pendiente aprobación
+  APPROVED        // Aprobado
+  PAID            // Pagado
+  CANCELLED       // Cancelado
+}
+
+model ProfitShare {
+  id              String              @id @default(cuid())
+  companyId       String
+  workId          String?
+  budgetComparisonId String?
+  
+  // Beneficiario
+  userId          String              // Empleado que obtiene el profit
+  userName        String
+  
+  // Origen del beneficio
+  source          String              // budget_optimization, negotiation, supplier_change
+  description     String
+  
+  // Cálculo
+  savingAmount    Float               // Ahorro total conseguido
+  sharePct        Float               // % que le corresponde
+  shareAmount     Float               // Cantidad a recibir
+  
+  // Estado
+  status          ProfitShareStatus   @default(CALCULATED)
+  
+  // Aprobación
+  approvedById    String?
+  approvedAt      DateTime?
+  
+  // Pago
+  paidAt          DateTime?
+  paymentRef      String?             // Referencia del pago
+  
+  // Notas
+  notes           String?
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  work            Work?           @relation(fields: [workId], references: [id])
+  
+  @@index([companyId])
+  @@index([userId])
+  @@index([workId])
+  @@index([status])
+}
+
+// ==========================================
+// IMPORTACIÓN DE CATÁLOGOS (PDF)
+// ==========================================
+
+model CatalogImport {
+  id              String          @id @default(cuid())
+  companyId       String
+  uploadedById    String
+  
+  // Tipo
+  type            String          // materials, merch
+  
+  // Archivo
+  fileName        String
+  filePath        String
+  fileSize        Int?
+  
+  // Estado
+  status          ImportStatus    @default(PENDING)
+  processedRows   Int             @default(0)
+  totalRows       Int?
+  errorRows       Int             @default(0)
+  
+  // Resultado
+  productsCreated Int             @default(0)
+  productsUpdated Int             @default(0)
+  errors          String?         // JSON con errores
+  
+  // Configuración de importación
+  config          String?         // JSON con mapeo de columnas
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  // Relaciones
+  company         Company         @relation(fields: [companyId], references: [id])
+  drafts          ImportedProductDraft[]
+  
+  @@index([companyId])
+  @@index([status])
+}
+
+model ImportedProductDraft {
+  id              String          @id @default(cuid())
+  importId        String
+  
+  // Datos crudos del PDF
+  rawData         String          // JSON con datos extraídos
+  
+  // Datos procesados
+  name            String?
+  sku             String?
+  description     String?
+  unit            String?
+  category        String?
+  
+  // Precio (pendiente de asignar)
+  price           Float?
+  hasPrice        Boolean         @default(false)
+  
+  // Estado
+  isProcessed     Boolean         @default(false)
+  isApproved      Boolean         @default(false)
+  productId       String?         // ID del producto creado
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  processedAt     DateTime?
+  
+  // Relaciones
+  import          CatalogImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  
+  @@index([importId])
+  @@index([isProcessed])
 }

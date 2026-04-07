@@ -25,6 +25,11 @@ import {
   Sparkles,
   PenTool,
   Eye,
+  Package,
+  ShoppingBag,
+  FileCheck,
+  FileSpreadsheet,
+  Coins,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -50,6 +55,15 @@ const navigation = [
   { name: 'Portal Cliente', href: '/client-portal', icon: Eye, roles: ['CLIENT'] },
   { name: 'Producción', href: '/production', icon: Factory },
   { name: 'Subcontratas', href: '/subcontractors', icon: Users },
+  // Catálogos y Pedidos
+  { name: 'Catálogo Materiales', href: '/materials', icon: Package },
+  { name: 'Catálogo Merch', href: '/merch', icon: ShoppingBag },
+  { name: 'Pedidos Materiales', href: '/material-orders', icon: Package },
+  { name: 'Pedidos Merch', href: '/merch-orders', icon: ShoppingBag },
+  { name: 'Certificaciones', href: '/certifications', icon: FileCheck },
+  { name: 'Pptos. Subcontratas', href: '/subcontractor-budgets', icon: FileSpreadsheet },
+  { name: 'Profit Share', href: '/profit-share', icon: Coins },
+  // Otros módulos
   { name: 'Gamificación', href: '/gamification', icon: Trophy },
   { name: 'Comisiones', href: '/commissions', icon: DollarSign },
   { name: 'Clientes', href: '/clients', icon: Users },

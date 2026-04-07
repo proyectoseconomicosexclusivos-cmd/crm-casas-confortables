@@ -695,3 +695,548 @@ export const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
   CLOSED: 'bg-green-500',
   LOST: 'bg-red-500',
 };
+
+// ==========================================
+// CATÁLOGOS Y PEDIDOS
+// ==========================================
+
+// Tipos de material
+export type MaterialTypeEnum =
+  | 'STRUCTURAL'
+  | 'FINISHES'
+  | 'ELECTRICAL'
+  | 'PLUMBING'
+  | 'INSULATION'
+  | 'FLOORING'
+  | 'WALLS'
+  | 'CEILING'
+  | 'DOORS'
+  | 'WINDOWS'
+  | 'KITCHEN'
+  | 'BATHROOM'
+  | 'OUTDOOR'
+  | 'OTHER';
+
+export type MaterialStatus = 'ACTIVE' | 'DISCONTINUED' | 'OUT_OF_STOCK' | 'LIMITED';
+
+// Categoría de producto
+export interface ProductCategory {
+  id: string;
+  companyId: string;
+  parentId?: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  order: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  children?: ProductCategory[];
+  parent?: ProductCategory;
+}
+
+// Producto de material
+export interface MaterialProduct {
+  id: string;
+  companyId: string;
+  categoryId?: string;
+  sku?: string;
+  reference?: string;
+  barcode?: string;
+  name: string;
+  description?: string;
+  brand?: string;
+  model?: string;
+  materialType: MaterialTypeEnum;
+  tags?: string;
+  unit: string;
+  unitQuantity?: number;
+  minOrder?: number;
+  increment?: number;
+  length?: number;
+  width?: number;
+  height?: number;
+  weight?: number;
+  costPrice?: number;
+  retailPrice?: number;
+  contractorPrice?: number;
+  priceUnit: string;
+  taxRate: number;
+  stockQuantity: number;
+  minStock?: number;
+  maxStock?: number;
+  status: MaterialStatus;
+  isActive: boolean;
+  isFeatured: boolean;
+  imageUrl?: string;
+  images?: string;
+  datasheetUrl?: string;
+  supplierId?: string;
+  supplierName?: string;
+  leadTime?: number;
+  internalNotes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  categoryRelation?: ProductCategory;
+}
+
+// Categoría de merchandising
+export type MerchCategory =
+  | 'BRANDED'
+  | 'PROMOTIONAL'
+  | 'GIFT'
+  | 'UNIFORM'
+  | 'SIGNAGE'
+  | 'PRINTED'
+  | 'DIGITAL'
+  | 'OTHER';
+
+// Producto de merchandising
+export interface MerchProduct {
+  id: string;
+  companyId: string;
+  sku?: string;
+  reference?: string;
+  name: string;
+  description?: string;
+  category: MerchCategory;
+  unit: string;
+  minOrder?: number;
+  costPrice?: number;
+  wholesalePrice?: number;
+  retailPrice?: number;
+  taxRate: number;
+  stockQuantity: number;
+  isActive: boolean;
+  visibleToRealEstate: boolean;
+  visibleToPartners: boolean;
+  visibleToFranchises: boolean;
+  imageUrl?: string;
+  images?: string;
+  supplierId?: string;
+  supplierName?: string;
+  customizable: boolean;
+  customizationOptions?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Estado de pedido de materiales
+export type MaterialOrderStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'ORDERED'
+  | 'PARTIAL'
+  | 'DELIVERED'
+  | 'CANCELLED';
+
+export type MaterialOrderType = 'INTERNAL' | 'SUBCONTRACTOR' | 'PROJECT' | 'STOCK';
+
+// Pedido de materiales
+export interface MaterialOrder {
+  id: string;
+  companyId: string;
+  orderNumber: string;
+  type: MaterialOrderType;
+  requestedById: string;
+  subcontractorId?: string;
+  workId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  supplierContact?: string;
+  supplierPhone?: string;
+  supplierEmail?: string;
+  deliveryAddress?: string;
+  deliveryCity?: string;
+  deliveryPostalCode?: string;
+  deliveryNotes?: string;
+  orderDate: Date;
+  expectedDate?: Date;
+  deliveryDate?: Date;
+  status: MaterialOrderStatus;
+  subtotal: number;
+  tax: number;
+  total: number;
+  discount: number;
+  approvedById?: string;
+  approvedAt?: Date;
+  approvalNotes?: string;
+  notes?: string;
+  internalNotes?: string;
+  purchaseOrderUrl?: string;
+  deliveryNoteUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: MaterialOrderItem[];
+}
+
+// Item de pedido de materiales
+export interface MaterialOrderItem {
+  id: string;
+  orderId: string;
+  productId?: string;
+  productName: string;
+  productSku?: string;
+  productUnit: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  discount: number;
+  total: number;
+  deliveredQty: number;
+  pendingQty?: number;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  product?: MaterialProduct;
+}
+
+// Estado de pedido de merch
+export type MerchOrderStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED';
+
+// Pedido de merchandising
+export interface MerchOrder {
+  id: string;
+  companyId: string;
+  orderNumber: string;
+  clientId?: string;
+  clientType?: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientCompany?: string;
+  shippingAddress?: string;
+  shippingCity?: string;
+  shippingPostalCode?: string;
+  shippingProvince?: string;
+  orderDate: Date;
+  shipDate?: Date;
+  deliveryDate?: Date;
+  status: MerchOrderStatus;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  total: number;
+  trackingNumber?: string;
+  carrier?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: MerchOrderItem[];
+}
+
+// Item de pedido de merch
+export interface MerchOrderItem {
+  id: string;
+  orderId: string;
+  productId?: string;
+  productName: string;
+  productSku?: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  total: number;
+  customization?: string;
+  createdAt: Date;
+  product?: MerchProduct;
+}
+
+// Estado de certificación
+export type CertificationStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'PARTIAL'
+  | 'FINAL'
+  | 'INVOICED'
+  | 'PAID';
+
+// Certificación
+export interface Certification {
+  id: string;
+  companyId: string;
+  workId: string;
+  clientId?: string;
+  number: string;
+  type: string;
+  period?: string;
+  certDate: Date;
+  fromDate?: Date;
+  toDate?: Date;
+  status: CertificationStatus;
+  previousCertified: number;
+  currentCertified: number;
+  totalCertified: number;
+  retentionPct: number;
+  retentionAmount: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  approvedById?: string;
+  approvedAt?: Date;
+  invoiceNumber?: string;
+  invoiceDate?: Date;
+  invoiceUrl?: string;
+  paidAt?: Date;
+  paymentMethod?: string;
+  notes?: string;
+  pdfUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: CertificationItem[];
+}
+
+// Item de certificación
+export interface CertificationItem {
+  id: string;
+  certificationId: string;
+  concept: string;
+  description?: string;
+  unit: string;
+  budgetQty: number;
+  previousQty: number;
+  currentQty: number;
+  unitPrice: number;
+  budgetAmount: number;
+  previousAmount: number;
+  currentAmount: number;
+  createdAt: Date;
+}
+
+// Estado de presupuesto de subcontrata
+export type SubcontractorBudgetStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+// Presupuesto de subcontrata
+export interface SubcontractorBudget {
+  id: string;
+  companyId: string;
+  workId: string;
+  subcontractorId: string;
+  number?: string;
+  title: string;
+  description?: string;
+  budgetDate: Date;
+  validUntil?: Date;
+  startDate?: Date;
+  endDate?: Date;
+  status: SubcontractorBudgetStatus;
+  subtotal: number;
+  tax: number;
+  total: number;
+  clientBudget?: number;
+  margin?: number;
+  marginPct?: number;
+  previousBudgetId?: string;
+  previousTotal?: number;
+  difference?: number;
+  acceptedAt?: Date;
+  acceptedById?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: SubcontractorBudgetItem[];
+}
+
+// Item de presupuesto de subcontrata
+export interface SubcontractorBudgetItem {
+  id: string;
+  budgetId: string;
+  concept: string;
+  description?: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  certifiedQty: number;
+  pendingQty: number;
+  certifiedAmount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Comparación de presupuestos
+export interface BudgetComparison {
+  id: string;
+  workId: string;
+  newBudgetId: string;
+  oldBudgetId?: string;
+  changedById: string;
+  subcontractorBefore?: string;
+  subcontractorAfter?: string;
+  amountBefore: number;
+  amountAfter: number;
+  difference: number;
+  differencePct: number;
+  marginBefore?: number;
+  marginAfter?: number;
+  marginImprovement?: number;
+  profitShareAmount?: number;
+  profitSharePct?: number;
+  aiAnalysis?: string;
+  aiRecommendations?: string;
+  createdAt: Date;
+}
+
+// Estado de profit share
+export type ProfitShareStatus = 'CALCULATED' | 'PENDING' | 'APPROVED' | 'PAID' | 'CANCELLED';
+
+// Profit Share
+export interface ProfitShare {
+  id: string;
+  companyId: string;
+  workId?: string;
+  budgetComparisonId?: string;
+  userId: string;
+  userName: string;
+  source: string;
+  description: string;
+  savingAmount: number;
+  sharePct: number;
+  shareAmount: number;
+  status: ProfitShareStatus;
+  approvedById?: string;
+  approvedAt?: Date;
+  paidAt?: Date;
+  paymentRef?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Importación de catálogo
+export interface CatalogImport {
+  id: string;
+  companyId: string;
+  uploadedById: string;
+  type: string;
+  fileName: string;
+  filePath: string;
+  fileSize?: number;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'ERROR';
+  processedRows: number;
+  totalRows?: number;
+  errorRows: number;
+  productsCreated: number;
+  productsUpdated: number;
+  errors?: string;
+  config?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+// Draft de producto importado
+export interface ImportedProductDraft {
+  id: string;
+  importId: string;
+  rawData: string;
+  name?: string;
+  sku?: string;
+  description?: string;
+  unit?: string;
+  category?: string;
+  price?: number;
+  hasPrice: boolean;
+  isProcessed: boolean;
+  isApproved: boolean;
+  productId?: string;
+  createdAt: Date;
+  processedAt?: Date;
+}
+
+// Labels para tipos de material
+export const MATERIAL_TYPE_LABELS: Record<MaterialTypeEnum, string> = {
+  STRUCTURAL: 'Estructural',
+  FINISHES: 'Acabados',
+  ELECTRICAL: 'Eléctrico',
+  PLUMBING: 'Fontanería',
+  INSULATION: 'Aislamiento',
+  FLOORING: 'Suelos',
+  WALLS: 'Paredes',
+  CEILING: 'Techos',
+  DOORS: 'Puertas',
+  WINDOWS: 'Ventanas',
+  KITCHEN: 'Cocina',
+  BATHROOM: 'Baño',
+  OUTDOOR: 'Exterior',
+  OTHER: 'Otro',
+};
+
+export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {
+  ACTIVE: 'Activo',
+  DISCONTINUED: 'Descatalogado',
+  OUT_OF_STOCK: 'Sin Stock',
+  LIMITED: 'Limitado',
+};
+
+export const MERCH_CATEGORY_LABELS: Record<MerchCategory, string> = {
+  BRANDED: 'Marca',
+  PROMOTIONAL: 'Promocional',
+  GIFT: 'Regalo',
+  UNIFORM: 'Uniforme',
+  SIGNAGE: 'Señalética',
+  PRINTED: 'Impreso',
+  DIGITAL: 'Digital',
+  OTHER: 'Otro',
+};
+
+export const MATERIAL_ORDER_STATUS_LABELS: Record<MaterialOrderStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobado',
+  ORDERED: 'Pedido',
+  PARTIAL: 'Entrega Parcial',
+  DELIVERED: 'Entregado',
+  CANCELLED: 'Cancelado',
+};
+
+export const MERCH_ORDER_STATUS_LABELS: Record<MerchOrderStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING: 'Pendiente',
+  PROCESSING: 'En Proceso',
+  SHIPPED: 'Enviado',
+  DELIVERED: 'Entregado',
+  CANCELLED: 'Cancelado',
+};
+
+export const CERTIFICATION_STATUS_LABELS: Record<CertificationStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobado',
+  PARTIAL: 'Parcial',
+  FINAL: 'Final',
+  INVOICED: 'Facturado',
+  PAID: 'Pagado',
+};
+
+export const SUBCONTRACTOR_BUDGET_STATUS_LABELS: Record<SubcontractorBudgetStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING: 'Pendiente',
+  ACCEPTED: 'Aceptado',
+  REJECTED: 'Rechazado',
+  IN_PROGRESS: 'En Ejecución',
+  COMPLETED: 'Completado',
+  CANCELLED: 'Cancelado',
+};
+
+export const PROFIT_SHARE_STATUS_LABELS: Record<ProfitShareStatus, string> = {
+  CALCULATED: 'Calculado',
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobado',
+  PAID: 'Pagado',
+  CANCELLED: 'Cancelado',
+};
