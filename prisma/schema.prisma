@@ -11,10 +11,6 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-// ==========================================
-// ENUMS
-// ==========================================
-
 enum UserRole {
   SUPER_ADMIN
   ADMIN
